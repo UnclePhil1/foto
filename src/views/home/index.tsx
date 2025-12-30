@@ -2237,20 +2237,17 @@ const GameSandbox: FC = () => {
           )}
 
           {/* Action buttons - FIXED FOR MOBILE */}
-          <div className="flex flex-col gap-3 w-full max-w-xs">
+          <div className="flex flex-col gap-3 w-full max-w-xs p-4">
             <button
               onClick={resetGame}
               className="relative px-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold rounded-xl text-lg shadow-2xl hover:scale-105 transition-transform active:scale-95"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl blur opacity-50 -z-10" />
               🔄 PLAY AGAIN
             </button>
             
             <button
               onClick={shareScore}
               className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity active:opacity-80"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               🐦 SHARE ON X
             </button>
@@ -2261,7 +2258,6 @@ const GameSandbox: FC = () => {
                 setGameState('start');
               }}
               className="px-6 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/15 transition-colors active:bg-white/20"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               🏆 VIEW CHALLENGES
             </button>
