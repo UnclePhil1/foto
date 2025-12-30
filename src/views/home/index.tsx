@@ -391,20 +391,39 @@ const GameSandbox: FC = () => {
     }
   }, [isClient, muted]);
 
-  // Audio playback
+  // Audio playback - FIXED AUTOPLAY
   useEffect(() => {
     if (!isClient || !audioRef.current) return;
 
     const bg = audioRef.current;
+    
+    const tryPlay = () => {
+      if (gameState === 'playing' && !audioStarted) {
+        bg.muted = muted;
+        bg.play().catch((e) => {
+          console.log('Audio autoplay prevented, will play on user interaction');
+          // Audio will play on first user interaction
+        });
+      }
+    };
+
     if (gameState === 'playing') {
       bg.muted = muted;
-      bg.play().catch(() => {});
-      setAudioStarted(true);
+      if (!audioStarted) {
+        // Try to play immediately, but don't set audioStarted yet
+        bg.play().then(() => {
+          setAudioStarted(true);
+        }).catch(() => {
+          // Audio will be played on first user interaction
+        });
+      } else {
+        bg.play().catch(() => {});
+      }
     } else {
       bg.pause();
       bg.currentTime = 0;
     }
-  }, [gameState, muted, isClient]);
+  }, [gameState, muted, isClient, audioStarted]);
 
   // Streak system
   useEffect(() => {
@@ -524,9 +543,12 @@ const GameSandbox: FC = () => {
     audioRef.current.muted = newMuted;
     if (lostRef.current) lostRef.current.muted = newMuted;
     setMuted(newMuted);
-    if (!audioStarted && isClient) {
-      audioRef.current.play().catch(() => {});
-      setAudioStarted(true);
+    
+    // Force audio to start playing when user first interacts
+    if (!audioStarted && isClient && audioRef.current) {
+      audioRef.current.play().then(() => {
+        setAudioStarted(true);
+      }).catch(() => {});
     }
   };
 
@@ -1136,6 +1158,13 @@ const GameSandbox: FC = () => {
       lastCoinTime.current = Date.now();
       lastPowerUpTime.current = Date.now();
       playSound('start');
+      
+      // Start audio on first user interaction
+      if (!audioStarted && audioRef.current) {
+        audioRef.current.play().then(() => {
+          setAudioStarted(true);
+        }).catch(() => {});
+      }
       return;
     }
 
@@ -1159,7 +1188,7 @@ const GameSandbox: FC = () => {
 
       lastScrollTime.current = now;
     }
-  }, [gameState, playSound]);
+  }, [gameState, playSound, audioStarted]);
 
   // Wheel (desktop) handler
   useEffect(() => {
@@ -1185,7 +1214,14 @@ const GameSandbox: FC = () => {
     if (!gameEl) return;
 
     const handleTouchStart = (e: TouchEvent) => {
-      e.preventDefault();
+      // Don't prevent default on all touch events - only on the game area
+      const target = e.target as HTMLElement;
+      const isButton = target.closest('button');
+      
+      if (!isButton) {
+        e.preventDefault();
+      }
+      
       if (e.touches.length > 0) {
         isTouchingRef.current = true;
         touchStartYRef.current = e.touches[0].clientY;
@@ -1196,6 +1232,13 @@ const GameSandbox: FC = () => {
           gameStartTime.current = Date.now();
           lastObstacleTime.current = Date.now();
           playSound('start');
+          
+          // Start audio on touch
+          if (!audioStarted && audioRef.current) {
+            audioRef.current.play().then(() => {
+              setAudioStarted(true);
+            }).catch(() => {});
+          }
         }
       }
     };
@@ -1216,8 +1259,10 @@ const GameSandbox: FC = () => {
       lastTouchMoveTime.current = currentTime;
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e: TouchEvent) => {
       isTouchingRef.current = false;
+      // Don't prevent default on touch end to allow button clicks
+      
       // Apply gentle deceleration
       setTimeout(() => {
         setVelocity(v => v * 0.95);
@@ -1226,11 +1271,21 @@ const GameSandbox: FC = () => {
 
     // Also handle mouse for desktop touchscreens
     const handleMouseDown = (e: MouseEvent) => {
-      if (gameState === 'start') {
+      const target = e.target as HTMLElement;
+      const isButton = target.closest('button');
+      
+      if (!isButton && gameState === 'start') {
         setGameState('playing');
         gameStartTime.current = Date.now();
         lastObstacleTime.current = Date.now();
         playSound('start');
+        
+        // Start audio on click
+        if (!audioStarted && audioRef.current) {
+          audioRef.current.play().then(() => {
+            setAudioStarted(true);
+          }).catch(() => {});
+        }
       }
     };
 
@@ -1255,10 +1310,17 @@ const GameSandbox: FC = () => {
       gameEl.removeEventListener('mousedown', handleMouseDown);
       gameEl.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [gameState, handleInput, playSound, isClient]);
+  }, [gameState, handleInput, playSound, isClient, audioStarted]);
 
   // Reset game
   const resetGame = () => {
+    // Start audio if not already started
+    if (!audioStarted && audioRef.current) {
+      audioRef.current.play().then(() => {
+        setAudioStarted(true);
+      }).catch(() => {});
+    }
+    
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
@@ -1313,7 +1375,9 @@ const GameSandbox: FC = () => {
   };
 
   // Share function - FIXED FOR MOBILE CLICKS
-  const shareScore = () => {
+  const shareScore = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event bubbling
+    
     if (!isClient) return;
     
     try {
@@ -1326,14 +1390,14 @@ const GameSandbox: FC = () => {
       const intent = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
       
       // Use window.open for better mobile compatibility
-      const newWindow = window.open(intent, '_blank');
+      const newWindow = window.open(intent, '_blank', 'noopener,noreferrer');
       if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
         // Fallback for mobile browsers
         window.location.href = intent;
       }
     } catch (e) {
       // Fallback to simple tweet URL
-      window.open('https://x.com/intent/tweet', '_blank');
+      window.open('https://x.com/intent/tweet', '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -1345,6 +1409,13 @@ const GameSandbox: FC = () => {
       lastObstacleTime.current = Date.now();
       lastCoinTime.current = Date.now();
       lastPowerUpTime.current = Date.now();
+      
+      // Start audio
+      if (!audioStarted && audioRef.current) {
+        audioRef.current.play().then(() => {
+          setAudioStarted(true);
+        }).catch(() => {});
+      }
     }
   };
 
@@ -1599,13 +1670,19 @@ const GameSandbox: FC = () => {
           {/* Social buttons */}
           <div className="flex gap-2 mb-6">
             <button
-              onClick={() => setShowChallenges(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowChallenges(true);
+              }}
               className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors active:bg-white/15"
             >
               🏆 Challenges
             </button>
             <button
-              onClick={() => setShowThemeSelector(!showThemeSelector)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowThemeSelector(!showThemeSelector);
+              }}
               className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors active:bg-white/15"
             >
               🎨 Theme
@@ -1620,7 +1697,10 @@ const GameSandbox: FC = () => {
                 {(['default', 'cyber', 'retro', 'nature'] as const).map(t => (
                   <button
                     key={t}
-                    onClick={() => setTheme(t)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTheme(t);
+                    }}
                     className={`px-3 py-2 rounded-lg text-xs capitalize ${theme === t ? 'bg-white text-black' : 'bg-white/5'} active:scale-95 transition-transform`}
                   >
                     {t}
@@ -1632,12 +1712,15 @@ const GameSandbox: FC = () => {
 
           {/* Start button */}
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setGameState('playing');
               gameStartTime.current = Date.now();
               lastObstacleTime.current = Date.now();
-              if (!audioStarted) {
-                toggleMute();
+              if (!audioStarted && audioRef.current) {
+                audioRef.current.play().then(() => {
+                  setAudioStarted(true);
+                }).catch(() => {});
               }
             }}
             className="relative px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold rounded-2xl text-lg shadow-2xl hover:scale-105 transition-transform active:scale-95 mb-4"
@@ -1658,7 +1741,10 @@ const GameSandbox: FC = () => {
               {(['Easy','Medium','Hard'] as const).map(d => (
                 <button
                   key={d}
-                  onClick={() => setDifficultyMode(d)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDifficultyMode(d);
+                  }}
                   className={`px-4 py-2 rounded-xl font-semibold transition-all ${difficultyMode===d 
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg scale-105' 
                     : 'bg-white/5 text-slate-300 hover:bg-white/10'} active:scale-95`}
@@ -1694,7 +1780,10 @@ const GameSandbox: FC = () => {
 
           {/* Instructions button */}
           <button
-            onClick={() => setShowInstructions(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowInstructions(true);
+            }}
             className="mt-4 px-4 py-2 bg-white/5 rounded-lg text-slate-300 hover:bg-white/10 transition-colors active:bg-white/15"
           >
             ℹ️ How to Play
@@ -1806,6 +1895,12 @@ const GameSandbox: FC = () => {
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={startFromModal}
+                className="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold hover:scale-105 transition-transform active:scale-95"
+              >
+                Start Game!
+              </button>
               <button
                 onClick={() => setShowInstructions(false)}
                 className="px-5 py-3 rounded-xl bg-white/6 text-white hover:bg-white/8 transition-colors active:bg-white/10"
@@ -2173,7 +2268,7 @@ const GameSandbox: FC = () => {
 
       {/* DEATH SCREEN - FIXED MOBILE CLICKS */}
       {gameState === 'dead' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-gradient-to-b from-black/90 via-black/80 to-black/90 backdrop-blur-sm p-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-gradient-to-b from-black/90 via-black/80 to-black/90 backdrop-blur-sm p-4 overflow-y-scroll">
           {/* Animated particles */}
           {particles.map(p => (
             <div
@@ -2247,13 +2342,14 @@ const GameSandbox: FC = () => {
             
             <button
               onClick={shareScore}
-              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity active:opacity-80"
+              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:scale-105 transition-transform active:scale-95"
             >
               🐦 SHARE ON X
             </button>
             
             <button
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 setShowChallenges(true);
                 setGameState('start');
               }}
