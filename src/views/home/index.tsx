@@ -26,7 +26,7 @@ export const HomeView: FC = () => {
       {/* MAIN – central game area (phone frame) */}
       <main className="flex flex-1 items-center justify-center px-4 py-3">
         <div className="relative aspect-[9/16] w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 shadow-[0_0_40px_rgba(56,189,248,0.35)]">
-          {/* Fake “feed card” top bar inside the phone */}
+          {/* Fake "feed card" top bar inside the phone */}
           <div className="flex items-center justify-between px-3 py-2 text-[10px] text-slate-400">
             <span className="rounded-full bg-white/5 px-2 py-1 text-[9px] uppercase tracking-wide">
               Scrolly Game
@@ -150,6 +150,7 @@ const MAX_VELOCITY = 5;
 const FRICTION = 0.88;
 const BASE_OBSTACLE_SPEED = 1.5;
 const GAP_SIZE = 28;
+const IMMUNITY_DURATION = 5000; // 5 seconds in milliseconds
 
 // Death messages
 const deathMessages = [
@@ -226,6 +227,7 @@ const GameSandbox: FC = () => {
   const isTouchingRef = useRef(false);
   const touchStartYRef = useRef(0);
   const lastTouchMoveTime = useRef(0);
+  const immunityStartTime = useRef<number | null>(null);
 
   // Collectibles and power-ups
   const [jars, setJars] = useState<Jar[]>([]);
@@ -458,7 +460,7 @@ const GameSandbox: FC = () => {
   }, [coinScore, comboChain]);
 
   // Sound effects
-  const playSound = useCallback((type: 'coin' | 'powerup' | 'death' | 'nearmiss' | 'start') => {
+  const playSound = useCallback((type: 'coin' | 'powerup' | 'death' | 'nearmiss' | 'start' | 'jar') => {
     if (!isClient) return;
     
     try {
@@ -504,6 +506,12 @@ const GameSandbox: FC = () => {
         gain.gain.setValueAtTime(0.25, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
         osc.start(); osc.stop(ctx.currentTime + 0.4);
+      } else if (type === 'jar') {
+        osc.frequency.setValueAtTime(330, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start(); osc.stop(ctx.currentTime + 0.3);
       }
     } catch (e) {
       console.error('Sound error:', e);
@@ -716,6 +724,15 @@ const GameSandbox: FC = () => {
     return { id, x, y, vx, vy, size, rot, vrot } as Meteor;
   }, []);
 
+  // Activate immunity from jar
+  const activateImmunity = useCallback(() => {
+    setIsImmune(true);
+    immunityStartTime.current = Date.now();
+    setImmunityRemaining(5.0);
+    playSound('jar');
+    createParticles(15, playerYRef.current, '#4ade80', 15, 4);
+  }, [playSound, createParticles]);
+
   // Power-up activation
   const activatePowerUp = useCallback((type: PowerUpType) => {
     const duration = 300;
@@ -772,6 +789,8 @@ const GameSandbox: FC = () => {
 
   // Collision detection
   const checkCollision = useCallback((pY: number, obs: Obstacle[]): boolean => {
+    if (isImmune) return false;
+    
     const playerLeft = 15;
     const playerRight = 15 + 4;
     const playerTop = pY - 2;
@@ -796,9 +815,11 @@ const GameSandbox: FC = () => {
       }
     }
     return false;
-  }, []);
+  }, [isImmune]);
 
   const checkMeteorCollision = useCallback((pY: number, ms: Meteor[]) => {
+    if (isImmune) return false;
+    
     const px = 15;
     const pr = 2.5;
     for (const m of ms) {
@@ -808,7 +829,7 @@ const GameSandbox: FC = () => {
       if (Math.sqrt(dx * dx + dy * dy) < (mr + pr)) return true;
     }
     return false;
-  }, []);
+  }, [isImmune]);
 
   // Main game loop
   useEffect(() => {
@@ -828,6 +849,19 @@ const GameSandbox: FC = () => {
 
       setScore(elapsed);
       
+      // Update immunity timer
+      if (isImmune && immunityStartTime.current) {
+        const immunityElapsed = (now - immunityStartTime.current) / 1000;
+        const remaining = Math.max(0, 5 - immunityElapsed);
+        setImmunityRemaining(remaining);
+        
+        if (remaining <= 0) {
+          setIsImmune(false);
+          immunityStartTime.current = null;
+          setImmunityRemaining(0);
+        }
+      }
+
       // Visual effects
       setGradientHue(270 + Math.min(90, elapsed * 1.6));
       setStarOffset(prev => ({
@@ -867,7 +901,7 @@ const GameSandbox: FC = () => {
         lastObstacleTime.current = now;
       }
 
-      // Spawn jars
+      // Spawn jars (immunity)
       if (now - lastJarTime.current > 8000 + Math.random() * 6000) {
         const id = jarIdRef.current++;
         const newJar: Jar = { id, x: 105, y: Math.random() * 80 + 10 };
@@ -955,6 +989,24 @@ const GameSandbox: FC = () => {
         return remaining;
       });
 
+      // Check jar collection
+      setJars(js => {
+        const remaining: Jar[] = [];
+        js.forEach(jar => {
+          const dx = Math.abs(jar.x - 15);
+          const dy = Math.abs(jar.y - playerYRef.current);
+          
+          if (dx < 4 && dy < 6) {
+            // Jar collected!
+            activateImmunity();
+            createParticles(jar.x, jar.y, '#4ade80', 12, 6);
+          } else {
+            remaining.push(jar);
+          }
+        });
+        return remaining.filter(j => j.x > -10);
+      });
+
       // Update power-ups
       setPowerUps(p => {
         const speed = BASE_OBSTACLE_SPEED * adjSpeed * deltaTime;
@@ -981,31 +1033,12 @@ const GameSandbox: FC = () => {
       });
 
       // Check collisions
-      if (!isImmune) {
-        const hitObstacle = checkCollision(playerYRef.current, obstacles);
-        const hitMeteor = checkMeteorCollision(playerYRef.current, meteors);
-        
-        if (hitObstacle || hitMeteor) {
-          handleDeath(15, playerYRef.current);
-        }
+      const hitObstacle = checkCollision(playerYRef.current, obstacles);
+      const hitMeteor = checkMeteorCollision(playerYRef.current, meteors);
+      
+      if (hitObstacle || hitMeteor) {
+        handleDeath(15, playerYRef.current);
       }
-
-      // Check jar collection
-      setJars(js => {
-        const px = 15;
-        const collected = js.filter(j => {
-          const collideX = Math.abs(j.x - px) < 4;
-          const collideY = Math.abs(j.y - playerYRef.current) < 6;
-          return !(collideX && collideY);
-        });
-        
-        if (collected.length < js.length) {
-          setIsImmune(true);
-          setImmunityRemaining(5);
-        }
-        
-        return collected.filter(j => j.x > -10);
-      });
 
       // Update danger level
       setDangerLevel(d => Math.max(0, d - 0.02 * deltaTime));
@@ -1032,8 +1065,8 @@ const GameSandbox: FC = () => {
   }, [
     gameState, isImmune, difficultyMode, getDifficulty, spawnObstacle, spawnCoin, 
     spawnPowerUp, spawnMeteor, checkCollision, checkMeteorCollision, handleDeath, 
-    playSound, createParticles, addTrailParticle, activatePowerUp, hasMagnet, 
-    hasDouble, todayChallenge, isClient, saveCoinsCollected
+    playSound, createParticles, addTrailParticle, activatePowerUp, activateImmunity,
+    hasMagnet, hasDouble, todayChallenge, isClient, saveCoinsCollected
   ]);
 
   // Particle updates
@@ -1093,24 +1126,6 @@ const GameSandbox: FC = () => {
 
     return () => { if (iv) clearInterval(iv); };
   }, [shieldTimer, slowmoTimer, doubleTimer, magnetTimer, isClient]);
-
-  // Immunity countdown
-  useEffect(() => {
-    if (!isImmune || !isClient) return;
-    const start = Date.now();
-    const total = 5000;
-    const iv = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const remaining = Math.max(0, (total - elapsed) / 1000);
-      setImmunityRemaining(remaining);
-      if (remaining <= 0) {
-        setIsImmune(false);
-        setImmunityRemaining(0);
-        clearInterval(iv);
-      }
-    }, 100);
-    return () => clearInterval(iv);
-  }, [isImmune, isClient]);
 
   // Input handling
   const handleInput = useCallback((delta: number, isTouch = false) => {
@@ -1264,6 +1279,7 @@ const GameSandbox: FC = () => {
     setIsNewRecord(false);
     setIsImmune(false);
     setImmunityRemaining(0);
+    immunityStartTime.current = null;
     obstacleIdRef.current = 0;
     setCoins([]);
     setPowerUps([]);
@@ -1296,7 +1312,7 @@ const GameSandbox: FC = () => {
     setScreenTint('transparent');
   };
 
-  // Share function
+  // Share function - FIXED FOR MOBILE CLICKS
   const shareScore = () => {
     if (!isClient) return;
     
@@ -1308,9 +1324,16 @@ const GameSandbox: FC = () => {
       
       const text = `🎮 I scored ${finalScore.toFixed(1)}s in #ScrollOrDie! ${hashtagChallenge} ${randomHashtag}\n\nCan you beat my score? ${pageUrl}`;
       const intent = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
-      window.open(intent, '_blank', 'noopener,noreferrer');
+      
+      // Use window.open for better mobile compatibility
+      const newWindow = window.open(intent, '_blank');
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        // Fallback for mobile browsers
+        window.location.href = intent;
+      }
     } catch (e) {
-      window.open('https://x.com/intent/tweet', '_blank', 'noopener,noreferrer');
+      // Fallback to simple tweet URL
+      window.open('https://x.com/intent/tweet', '_blank');
     }
   };
 
@@ -1421,6 +1444,11 @@ const GameSandbox: FC = () => {
           0%, 100% { opacity: 0.5; }
           50% { opacity: 1; }
         }
+        @keyframes jarFloat {
+          0%, 100% { transform: translateX(-50%) rotate(0deg); }
+          25% { transform: translateX(-50%) rotate(5deg); }
+          75% { transform: translateX(-50%) rotate(-5deg); }
+        }
       `}</style>
       
       {/* Flash effect overlay */}
@@ -1496,6 +1524,48 @@ const GameSandbox: FC = () => {
         }}
       />
 
+      {/* Immunity Progress Bar - Bottom Center */}
+      {gameState === 'playing' && isImmune && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 w-48">
+          <div className="bg-black/40 backdrop-blur-sm rounded-full p-1 border border-emerald-500/30">
+            <div className="flex items-center justify-between px-2">
+              <span className="text-xs text-emerald-300 font-bold">🛡️ IMMUNE</span>
+              <span className="text-xs text-emerald-200 font-mono">
+                {immunityRemaining.toFixed(1)}s
+              </span>
+            </div>
+            <div className="w-full h-2 bg-black/30 rounded-full overflow-hidden mt-1">
+              <div 
+                className="h-2 bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-100"
+                style={{ width: `${(immunityRemaining / 5) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Immunity visual effect */}
+      {gameState === 'playing' && isImmune && (
+        <div className="absolute inset-0 pointer-events-none z-20">
+          <div 
+            className="absolute inset-0 rounded-2xl"
+            style={{
+              background: `radial-gradient(ellipse at center, transparent 40%, rgba(74, 222, 128, 0.1) 100%)`,
+              animation: 'pulse 1s ease-in-out infinite',
+            }}
+          />
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            <div 
+              className="w-64 h-64 rounded-full"
+              style={{
+                background: `radial-gradient(circle, rgba(74, 222, 128, 0.05) 0%, transparent 70%)`,
+                animation: 'pulse 2s ease-in-out infinite',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* START SCREEN */}
       {gameState === 'start' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
@@ -1530,13 +1600,13 @@ const GameSandbox: FC = () => {
           <div className="flex gap-2 mb-6">
             <button
               onClick={() => setShowChallenges(true)}
-              className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+              className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors active:bg-white/15"
             >
               🏆 Challenges
             </button>
             <button
               onClick={() => setShowThemeSelector(!showThemeSelector)}
-              className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+              className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors active:bg-white/15"
             >
               🎨 Theme
             </button>
@@ -1551,7 +1621,7 @@ const GameSandbox: FC = () => {
                   <button
                     key={t}
                     onClick={() => setTheme(t)}
-                    className={`px-3 py-2 rounded-lg text-xs capitalize ${theme === t ? 'bg-white text-black' : 'bg-white/5'}`}
+                    className={`px-3 py-2 rounded-lg text-xs capitalize ${theme === t ? 'bg-white text-black' : 'bg-white/5'} active:scale-95 transition-transform`}
                   >
                     {t}
                   </button>
@@ -1591,7 +1661,7 @@ const GameSandbox: FC = () => {
                   onClick={() => setDifficultyMode(d)}
                   className={`px-4 py-2 rounded-xl font-semibold transition-all ${difficultyMode===d 
                     ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg scale-105' 
-                    : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                    : 'bg-white/5 text-slate-300 hover:bg-white/10'} active:scale-95`}
                 >
                   {d}
                 </button>
@@ -1625,7 +1695,7 @@ const GameSandbox: FC = () => {
           {/* Instructions button */}
           <button
             onClick={() => setShowInstructions(true)}
-            className="mt-4 px-4 py-2 bg-white/5 rounded-lg text-slate-300 hover:bg-white/10 transition-colors"
+            className="mt-4 px-4 py-2 bg-white/5 rounded-lg text-slate-300 hover:bg-white/10 transition-colors active:bg-white/15"
           >
             ℹ️ How to Play
           </button>
@@ -1639,7 +1709,12 @@ const GameSandbox: FC = () => {
           <div className="relative w-[90%] max-w-md rounded-2xl bg-gradient-to-b from-slate-900/95 to-slate-800/95 ring-1 ring-white/5 shadow-2xl p-5 z-50">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold text-white">🏆 Active Challenges</h3>
-              <button onClick={() => setShowChallenges(false)} className="p-2 hover:bg-white/10 rounded-lg">✕</button>
+              <button 
+                onClick={() => setShowChallenges(false)} 
+                className="p-2 hover:bg-white/10 rounded-lg active:bg-white/15"
+              >
+                ✕
+              </button>
             </div>
             <div className="space-y-3">
               {activeChallenges.map(challenge => (
@@ -1677,7 +1752,12 @@ const GameSandbox: FC = () => {
               <div>
                 <h3 className="text-2xl font-extrabold text-white">🎮 How to Master Scroll or Die</h3>
               </div>
-              <button onClick={() => setShowInstructions(false)} className="p-3 hover:bg-white/10 rounded-xl">✕</button>
+              <button 
+                onClick={() => setShowInstructions(false)} 
+                className="p-3 hover:bg-white/10 rounded-xl active:bg-white/15"
+              >
+                ✕
+              </button>
             </div>
 
             <div className="flex gap-4 mb-6">
@@ -1688,6 +1768,15 @@ const GameSandbox: FC = () => {
                   <div>⏱️ Slowmo - Slow time</div>
                   <div>2️⃣ Double - 2x score</div>
                   <div>🧲 Magnet - Attract coins</div>
+                </div>
+              </div>
+              <div className="flex-1 bg-white/5 p-4 rounded-xl">
+                <div className="text-lg mb-2">🫙 Immunity Jars</div>
+                <div className="text-sm text-slate-300 space-y-1">
+                  <div>💚 Green Jars - 5s immunity</div>
+                  <div>🛡️ Avoid all obstacles</div>
+                  <div>⏱️ Progress bar shows time left</div>
+                  <div>✨ Collect when in danger!</div>
                 </div>
               </div>
             </div>
@@ -1719,7 +1808,7 @@ const GameSandbox: FC = () => {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowInstructions(false)}
-                className="px-5 py-3 rounded-xl bg-white/6 text-white hover:bg-white/8 transition-colors"
+                className="px-5 py-3 rounded-xl bg-white/6 text-white hover:bg-white/8 transition-colors active:bg-white/10"
               >
                 Got it!
               </button>
@@ -1797,7 +1886,7 @@ const GameSandbox: FC = () => {
           <div className="absolute bottom-3 right-3 flex flex-col gap-2 z-20">
             <button
               onClick={toggleMute}
-              className="p-3 bg-white/10 backdrop-blur-sm rounded-xl hover:bg-white/20 transition-colors"
+              className="p-3 bg-white/10 backdrop-blur-sm rounded-xl hover:bg-white/20 transition-colors active:bg-white/25"
               title={muted ? 'Unmute' : 'Mute'}
             >
               {muted ? '🔇' : '🔊'}
@@ -1818,6 +1907,7 @@ const GameSandbox: FC = () => {
                 0 0 60px ${themeStyles.playerColor}40
               `,
               filter: `blur(${dangerLevel * 2}px)`,
+              border: isImmune ? '2px solid #4ade80' : 'none',
             }}
           />
 
@@ -1993,27 +2083,95 @@ const GameSandbox: FC = () => {
             </div>
           ))}
 
-          {/* Jars */}
+          {/* Jars - Green Immunity Jars */}
           {jars.map(j => (
             <div
               key={j.id}
-              className="absolute w-4 h-4 rounded-full flex items-center justify-center animate-float"
+              className="absolute z-20"
               style={{
                 left: `${j.x}%`,
                 transform: 'translateX(-50%)',
                 top: `${j.y}%`,
-                background: 'linear-gradient(180deg,#fffacd,#ffd580)',
-                boxShadow: '0 0 10px rgba(255,220,100,0.8)',
-                animationDelay: `${j.id % 3 * 0.2}s`,
+                animation: `jarFloat 3s ease-in-out infinite`,
+                animationDelay: `${j.id % 3 * 0.5}s`,
               }}
             >
-              <div className="w-2 h-3 rounded-t-sm bg-yellow-300" />
+              {/* Jar body */}
+              <div 
+                className="relative w-6 h-8"
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 30%, #047857 70%, #065f46 100%)',
+                  borderRadius: '3px 3px 8px 8px',
+                  boxShadow: `
+                    inset 0 -4px 6px rgba(0,0,0,0.3),
+                    inset 0 4px 6px rgba(255,255,255,0.2),
+                    0 0 15px rgba(74, 222, 128, 0.7),
+                    0 0 30px rgba(74, 222, 128, 0.4)
+                  `,
+                  border: '2px solid #065f46',
+                }}
+              >
+                {/* Jar neck */}
+                <div 
+                  className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-2"
+                  style={{
+                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                    borderRadius: '3px 3px 0 0',
+                    border: '2px solid #065f46',
+                    borderBottom: 'none',
+                  }}
+                />
+                {/* Jar lid */}
+                <div 
+                  className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-5 h-2"
+                  style={{
+                    background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+                    borderRadius: '4px',
+                    border: '1px solid #92400e',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  }}
+                />
+                {/* Jar shine */}
+                <div 
+                  className="absolute top-1 left-1 w-3 h-3 rounded-full"
+                  style={{
+                    background: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 70%)',
+                  }}
+                />
+                {/* Jar contents (glowing liquid) */}
+                <div 
+                  className="absolute bottom-0 left-0 right-0"
+                  style={{
+                    height: '70%',
+                    background: 'linear-gradient(to top, rgba(74, 222, 128, 0.8) 0%, rgba(52, 211, 153, 0.9) 100%)',
+                    borderRadius: '0 0 6px 6px',
+                    borderTop: '1px solid rgba(255,255,255,0.2)',
+                  }}
+                />
+                {/* Jar glow effect */}
+                <div 
+                  className="absolute -inset-2 rounded-full"
+                  style={{
+                    background: 'radial-gradient(circle, rgba(74, 222, 128, 0.3) 0%, transparent 70%)',
+                    filter: 'blur(4px)',
+                    zIndex: -1,
+                  }}
+                />
+              </div>
+              {/* Jar particle trail */}
+              <div 
+                className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-2"
+                style={{
+                  background: 'radial-gradient(ellipse, rgba(74, 222, 128, 0.3) 0%, transparent 70%)',
+                  filter: 'blur(3px)',
+                }}
+              />
             </div>
           ))}
         </>
       )}
 
-      {/* DEATH SCREEN */}
+      {/* DEATH SCREEN - FIXED MOBILE CLICKS */}
       {gameState === 'dead' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-gradient-to-b from-black/90 via-black/80 to-black/90 backdrop-blur-sm p-4">
           {/* Animated particles */}
@@ -2078,11 +2236,12 @@ const GameSandbox: FC = () => {
             </div>
           )}
 
-          {/* Action buttons */}
+          {/* Action buttons - FIXED FOR MOBILE */}
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button
               onClick={resetGame}
               className="relative px-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold rounded-xl text-lg shadow-2xl hover:scale-105 transition-transform active:scale-95"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl blur opacity-50 -z-10" />
               🔄 PLAY AGAIN
@@ -2090,7 +2249,8 @@ const GameSandbox: FC = () => {
             
             <button
               onClick={shareScore}
-              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity"
+              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:opacity-90 transition-opacity active:opacity-80"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               🐦 SHARE ON X
             </button>
@@ -2100,7 +2260,8 @@ const GameSandbox: FC = () => {
                 setShowChallenges(true);
                 setGameState('start');
               }}
-              className="px-6 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/15 transition-colors"
+              className="px-6 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/15 transition-colors active:bg-white/20"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               🏆 VIEW CHALLENGES
             </button>
