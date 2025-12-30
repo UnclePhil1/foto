@@ -604,7 +604,7 @@ Play the Solana token puzzle game at FOTO! #FOTOGame #Solana #scrollygame`;
                     from the grid below
                   </p>
                   <p>2. Choose puzzle difficulty (3×3 or 4×4)</p>
-                  <p>3. Click "Start Game" to scramble the image</p>
+                  <p>3. Click &quot;Start Game&quot; to scramble the image</p>
                   <p>4. Slide tiles to reassemble the logo</p>
                   <p>5. Complete with minimal moves and time!</p>
                 </div>
