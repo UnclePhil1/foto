@@ -562,7 +562,7 @@ Play the Solana token puzzle game at FOTO! #FOTOGame #Solana #scrollygame`;
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-2 mb-6 bg-game-card rounded-2xl p-1.5">
+          <div className="flex gap-2 mb-6 bg-game-card rounded-2xl p-4">
             <button
               onClick={() => setActiveTab("brands")}
               className={`flex-1 py-3 rounded-xl font-bold transition-all text-sm ${
@@ -587,7 +587,7 @@ Play the Solana token puzzle game at FOTO! #FOTOGame #Solana #scrollygame`;
 
           {/* Instructions Modal */}
           {showInstructions && (
-            <div className="inset-0 absolute bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="absolute bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
               <div className="bg-game-card rounded-3xl p-6 max-w-md w-full border border-white/10">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-bold text-white">How to Play</h2>
@@ -625,7 +625,7 @@ Play the Solana token puzzle game at FOTO! #FOTOGame #Solana #scrollygame`;
           )}
 
           {/* Selection Grid */}
-          <div className="mb-6">
+          <div className="mb-6 p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">
                 Select a {activeTab === "brands" ? "Brand" : "Token"}
@@ -868,11 +868,9 @@ Play the Solana token puzzle game at FOTO! #FOTOGame #Solana #scrollygame`;
               {/* Card Preview */}
               <div className="p-6 pb-4">
                 {/* PUZZLE COMPLETED Header */}
-                <h1 className="text-2xl md:text-3xl font-black text-white tracking-tighter leading-none mb-6">
-                  PUZZLE
-                  <br />
-                  COMPLETED
-                </h1>
+                <h3 className="text-2xl md:text-3xl font-black text-white tracking-tighter leading-none mb-6">
+                  PUZZLE COMPLETED
+                </h3>
 
                 {/* Framed Image */}
                 <div className="border border-white/30 p-4 mb-2">
