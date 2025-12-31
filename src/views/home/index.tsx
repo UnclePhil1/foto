@@ -1357,7 +1357,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
             {activeTab === "create" && (
               <div className="mb-8">
                 <div
-                  className={`rounded-[24px] p-6 ${
+                  className={`rounded-[24px] p-2 ${
                     themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
                   }`}
                 >
@@ -1382,7 +1382,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                       value={pixabaySearchQuery}
                       onChange={(e) => setPixabaySearchQuery(e.target.value)}
                       placeholder="Search for images..."
-                      className={`flex-1 px-4 py-3 rounded-l-[12px] focus:outline-none text-sm ${
+                      className={`flex-1 px-2 py-3 rounded-l-[12px] focus:outline-none text-sm ${
                         themeMode === "dark"
                           ? "bg-gray-900 border border-gray-700 text-white focus:border-blue-500"
                           : "bg-white border border-[#EAEAEA] text-[#0A0A0A] focus:border-[#007AFF]"
@@ -1390,7 +1390,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                     />
                     <button
                       onClick={() => fetchPixabayImages(pixabaySearchQuery)}
-                      className="px-5 bg-[#007AFF] text-white font-medium rounded-r-[12px] text-sm hover:bg-[#0056CC]"
+                      className="px-3 bg-[#007AFF] text-white font-medium rounded-r-[12px] text-sm hover:bg-[#0056CC]"
                     >
                       Search
                     </button>
