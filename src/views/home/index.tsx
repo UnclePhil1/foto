@@ -1126,7 +1126,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                         : "bg-orange-100 text-orange-600"
                     }`}
                   >
-                    🔥 TODAY'S PUZZLE
+                    🔥 TODAY&apos;S PUZZLE
                   </span>
                 </div>
 
