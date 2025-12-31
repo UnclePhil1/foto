@@ -1,7 +1,7 @@
 // Next, React
-import { FC, useCallback, useEffect, useRef, useState } from 'react';
-import pkg from '../../../package.json';
-import React from 'react';
+import { FC, useEffect, useState, useCallback, useRef } from "react";
+import pkg from "../../../package.json";
+import React from "react";
 
 // ❌ DO NOT EDIT ANYTHING ABOVE THIS LINE
 
@@ -49,2333 +49,2083 @@ export const HomeView: FC = () => {
   );
 };
 
-
 // ✅ THIS IS THE ONLY PART YOU EDIT FOR THE JAM
+// Replace this entire GameSandbox component with the one AI generates.
 // Keep the name `GameSandbox` and the `FC` type.
 
-// Types
-interface Obstacle {
+interface PuzzleItem {
   id: number;
-  x: number;
-  type: 'bar' | 'gap' | 'double';
-  gapY?: number;
-  gapHeight?: number;
-  topHeight?: number;
-  bottomY?: number;
-}
-
-interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color?: string;
-  size?: number;
-}
-
-interface Jar {
-  id: number;
-  x: number; // percent
-  y: number; // percent
-}
-
-interface Coin {
-  id: number;
-  x: number;
-  y: number;
-  collected: boolean;
-}
-
-type PowerUpType = 'shield' | 'magnet' | 'slowmo' | 'double';
-interface PowerUp {
-  id: number;
-  x: number;
-  y: number;
-  type: PowerUpType;
-  collected: boolean;
-}
-
-interface Achievement {
-  id: string;
   name: string;
-  icon: string;
-  unlocked: boolean;
+  symbol: string;
+  imageUrl: string;
 }
 
-interface Meteor {
-  id: number;
-  x: number; // percent
-  y: number; // percent
-  vx: number; // percent per frame
-  vy: number;
-  size: number; // percent diameter
-  rot: number;
-  vrot: number;
+interface GameSandboxProps {
+  theme?: "light" | "dark";
 }
 
-interface Challenge {
-  id: string;
-  title: string;
-  reward: number;
-  type: 'daily' | 'weekly' | 'special';
-  progress: number;
-  target: number;
-}
-
-interface ComboEffect {
-  type: 'speed' | 'shield' | 'magnet';
-  level: number;
-  timer: number;
-}
-
-type GameState = 'start' | 'playing' | 'dead';
-type ThemeType = 'default' | 'cyber' | 'retro' | 'nature';
-type DifficultyMode = 'Easy' | 'Medium' | 'Hard';
-
-interface DailyChallenge {
-  id: string;
-  title: string;
-  type: 'survive' | 'collect';
-  target: number;
-  progress: number;
-  unlocked: boolean;
-}
-
-// Constants
-const GRAVITY = 0.06;
-const SCROLL_SENSITIVITY = 1.2;
-const MAX_VELOCITY = 5;
-const FRICTION = 0.88;
-const BASE_OBSTACLE_SPEED = 1.5;
-const GAP_SIZE = 28;
-const IMMUNITY_DURATION = 5000; // 5 seconds in milliseconds
-
-// Death messages
-const deathMessages = [
-  "You scrolled too hard.",
-  "The feed consumed you.",
-  "Doom scrolled.",
-  "Scroll addiction: fatal.",
-  "Your thumb betrayed you.",
-  "Scrolled into the void.",
-  "Infinite feed reached.",
-  "Better luck next scroll!",
+const PUZZLE_IMAGES: PuzzleItem[] = [
+  { id: 1, imageUrl: "/assets/jup.jpg", name: "Jupiter", symbol: "JUP" },
+  { id: 2, imageUrl: "/assets/sol.jpg", name: "Solana", symbol: "SOL" },
+  { id: 3, imageUrl: "/assets/scroll.jpg", name: "Scrolly", symbol: "SCRL" },
+  { id: 4, imageUrl: "/assets/uncle.jpg", name: "UnclePhil", symbol: "DEV" },
 ];
 
-const challengesPool: DailyChallenge[] = [
-  { id: 'survive_20', title: 'Survive 20 seconds', type: 'survive', target: 20, progress: 0, unlocked: false },
-  { id: 'collect_30', title: 'Collect 50 coins', type: 'collect', target: 50, progress: 0, unlocked: false },
-  { id: 'survive_35', title: 'Survive 35 seconds', type: 'survive', target: 35, progress: 0, unlocked: false },
-  { id: 'collect_20', title: 'Collect 20 coins', type: 'collect', target: 20, progress: 0, unlocked: false },
-  { id: 'survive_45', title: 'Survive 45 seconds', type: 'survive', target: 45, progress: 0, unlocked: false },
-  { id: 'collect_10', title: 'Collect 10 coins', type: 'collect', target: 10, progress: 0, unlocked: false },
-  { id: 'survive_50', title: 'Survive 50 seconds', type: 'survive', target: 50, progress: 0, unlocked: false },
-  { id: 'collect_5', title: 'Collect 5 coins', type: 'collect', target: 5, progress: 0, unlocked: false },
-  { id: 'survive_15', title: 'Survive 15 seconds', type: 'survive', target: 15, progress: 0, unlocked: false },
-  { id: 'collect_32', title: 'Collect 32 coins', type: 'collect', target: 32, progress: 0, unlocked: false },
+const BLOCKED_KEYWORDS = [
+  "violence",
+  "war",
+  "weapon",
+  "drug",
+  "alcohol",
+  "cigarette",
+  "nude",
+  "naked",
+  "sexy",
+  "porn",
+  "adult",
+  "explicit",
+  "gore",
+  "hate",
+  "racist",
+  "offensive",
+  "terror",
+  "crime",
 ];
 
-const achievementDefs: Achievement[] = [
-  { id: 'first_game', name: 'First Scroll', icon: '🎮', unlocked: false },
-  { id: 'survive_10', name: 'Survivor', icon: '⏱️', unlocked: false },
-  { id: 'survive_30', name: 'Endurance', icon: '🏆', unlocked: false },
-  { id: 'coins_10', name: 'Collector', icon: '💰', unlocked: false },
-  { id: 'coins_50', name: 'Rich', icon: '💎', unlocked: false },
-  { id: 'near_miss_5', name: 'Daredevil', icon: '😈', unlocked: false },
-  { id: 'powerup_all', name: 'Power Player', icon: '⚡', unlocked: false },
-];
+const LOCAL_STORAGE_KEY = "foto_local_images";
+const DAILY_PUZZLE_KEY = "foto_daily_puzzle";
+const DAILY_STATS_KEY = "foto_daily_stats";
+const SOUND_ENABLED_KEY = "foto_sound_enabled";
 
-// High score helpers - SAFE VERSION
-const getHighScore = (): number => {
-  if (typeof window === 'undefined') return 0;
-  const stored = localStorage.getItem('scrollOrDie_highScore');
-  return stored ? parseFloat(stored) : 0;
+interface DailyPuzzle {
+  date: string;
+  imageIndex: number;
+  gridSize: number;
+}
+
+interface DailyStats {
+  [date: string]: {
+    moves: number;
+    time: number;
+    completed: boolean;
+  };
+}
+
+const getDailyPuzzle = (): DailyPuzzle => {
+  const today = new Date().toDateString();
+  const dateSeed = today
+    .split("")
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+  return {
+    date: today,
+    imageIndex: dateSeed % PUZZLE_IMAGES.length,
+    gridSize: 3 + (dateSeed % 3),
+  };
 };
 
-const setHighScore = (score: number): void => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem('scrollOrDie_highScore', score.toFixed(1));
+const getDailyPercentile = (moves: number, time: number): number => {
+  const dateStr = new Date().toDateString();
+  const seed = dateStr
+    .split("")
+    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
+
+  const baseScore = Math.floor(moves * 0.7 + time * 0.3);
+  const pseudoRandom = (seed * 9301 + 49297) % 233280;
+  const normalized = (pseudoRandom % 100) / 100;
+
+  const distribution = Math.sin(baseScore * 0.5 + normalized) * 0.3 + 0.5;
+  return Math.min(95, Math.max(5, Math.floor(distribution * 100)));
 };
 
-const GameSandbox: FC = () => {
-  // Client-side detection
-  const [isClient, setIsClient] = useState(false);
-  
-  // Core game states
-  const [gameState, setGameState] = useState<GameState>('start');
-  const [playerY, setPlayerY] = useState(50);
-  const [velocity, setVelocity] = useState(0);
-  const [obstacles, setObstacles] = useState<Obstacle[]>([]);
-  const [score, setScore] = useState(0);
-  const [highScore, setHighScoreState] = useState(0);
-  const [particles, setParticles] = useState<Particle[]>([]);
-  const [deathMessage, setDeathMessage] = useState('');
-  const [isNewRecord, setIsNewRecord] = useState(false);
-  const [dangerLevel, setDangerLevel] = useState(0);
-  
-  // Refs
-  const gameRef = useRef<HTMLDivElement>(null);
-  const animationRef = useRef<number>();
-  const lastScrollTime = useRef(0);
-  const obstacleIdRef = useRef(0);
-  const gameStartTime = useRef(0);
-  const lastObstacleTime = useRef(0);
-  const playerYRef = useRef(playerY);
-  const velocityRef = useRef(0);
-  const isTouchingRef = useRef(false);
-  const touchStartYRef = useRef(0);
-  const lastTouchMoveTime = useRef(0);
-  const immunityStartTime = useRef<number | null>(null);
-
-  // Collectibles and power-ups
-  const [jars, setJars] = useState<Jar[]>([]);
-  const jarIdRef = useRef(0);
-  const lastJarTime = useRef(0);
-  const [isImmune, setIsImmune] = useState(false);
-  const [immunityRemaining, setImmunityRemaining] = useState(0);
-
-  const [coins, setCoins] = useState<Coin[]>([]);
-  const coinIdRef = useRef(0);
-  const lastCoinTime = useRef(0);
-
-  const [powerUps, setPowerUps] = useState<PowerUp[]>([]);
-  const powerUpIdRef = useRef(0);
-  const lastPowerUpTime = useRef(0);
-
-  const [trailParticles, setTrailParticles] = useState<Particle[]>([]);
-  const particleIdRef = useRef(0);
-
-  const [combo, setCombo] = useState(0);
-  const [showCombo, setShowCombo] = useState(false);
-  const [nearMissCount, setNearMissCount] = useState(0);
-
-  // Power-up states
-  const [hasShield, setHasShield] = useState(false);
-  const [shieldTimer, setShieldTimer] = useState(0);
-  const [hasSlowmo, setHasSlowmo] = useState(false);
-  const [slowmoTimer, setSlowmoTimer] = useState(0);
-  const [hasDouble, setHasDouble] = useState(false);
-  const [doubleTimer, setDoubleTimer] = useState(0);
-  const [hasMagnet, setHasMagnet] = useState(false);
-  const [magnetTimer, setMagnetTimer] = useState(0);
-
-  // Achievements and sharing
-  const [newAchievement, setNewAchievement] = useState<Achievement | null>(null);
-  const [totalCoins, setTotalCoins] = useState(0);
-  const [coinScore, setCoinScore] = useState(0);
-  const [unlockedAchievements, setUnlockedAchievements] = useState<string[]>([]);
-  const [usedPowerUps, setUsedPowerUps] = useState<Set<PowerUpType>>(new Set());
-
-  // Meteors
-  const [meteors, setMeteors] = useState<Meteor[]>([]);
-  const meteorIdRef = useRef(0);
-  const lastMeteorTime = useRef(0);
-
-  // Game features
-  const [difficultyMode, setDifficultyMode] = useState<DifficultyMode>('Medium');
-  const [scoreMultiplier, setScoreMultiplier] = useState(1);
-  const [showDoublePopup, setShowDoublePopup] = useState(false);
-  const [starOffset, setStarOffset] = useState({ a: 0, b: 0, c: 0 });
-  const [gradientHue, setGradientHue] = useState(270);
-  const [todayChallenge, setTodayChallenge] = useState<DailyChallenge | null>(null);
-
-  // UI states
-  const [activeChallenges] = useState<Challenge[]>([
-    { id: 'streak_3', title: 'Play 3 games in a row', reward: 50, type: 'daily', progress: 0, target: 3 },
-    { id: 'survive_40', title: 'Survive 40 seconds', reward: 100, type: 'special', progress: 0, target: 40 },
-    { id: 'collect_100', title: 'Collect 100 coins', reward: 150, type: 'weekly', progress: 0, target: 100 },
-  ]);
-
-  const [comboEffect, setComboEffect] = useState<ComboEffect | null>(null);
-  const [theme, setTheme] = useState<ThemeType>('default');
-  const [hashtagChallenge] = useState<string>('#ScrollOrDieChallenge');
-  const [showChallenges, setShowChallenges] = useState(false);
-  const [streak, setStreak] = useState(0);
-  const [comboChain, setComboChain] = useState(0);
-  const [comboMultiplier, setComboMultiplier] = useState(1);
-  const [showComboText, setShowComboText] = useState(false);
-  const [flashEffect, setFlashEffect] = useState(false);
-  const [rumbleEffect, setRumbleEffect] = useState(false);
-  const [screenTint, setScreenTint] = useState<string>('transparent');
-  const [showThemeSelector, setShowThemeSelector] = useState(false);
-
-  // Audio
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const lostRef = useRef<HTMLAudioElement | null>(null);
-  const [muted, setMuted] = useState(false);
-  const [audioStarted, setAudioStarted] = useState(false);
+const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
+  const [showSplash, setShowSplash] = useState(true);
+  const [gridSize, setGridSize] = useState(3);
+  const [tiles, setTiles] = useState<number[]>([]);
+  const [moves, setMoves] = useState(0);
+  const [seconds, setSeconds] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [hasWon, setHasWon] = useState(false);
+  const [showImagePicker, setShowImagePicker] = useState(true);
+  const [activeTab, setActiveTab] = useState<"main" | "create" | "local">(
+    "main"
+  );
+  const [pixabayImages, setPixabayImages] = useState<PuzzleItem[]>([]);
+  const [selectedPixabayImage, setSelectedPixabayImage] =
+    useState<PuzzleItem | null>(null);
+  const [localImages, setLocalImages] = useState<PuzzleItem[]>([]);
+  const [selectedLocalImage, setSelectedLocalImage] =
+    useState<PuzzleItem | null>(null);
+  const [isLoadingPixabay, setIsLoadingPixabay] = useState(false);
+  const [pixabayError, setPixabayError] = useState<string | null>(null);
+  const [selectedMain, setSelectedMain] = useState<PuzzleItem>(
+    PUZZLE_IMAGES[0]
+  );
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [puzzleSize, setPuzzleSize] = useState(300);
+  const [tileSize, setTileSize] = useState((300 - (3 + 1) * 4) / 3);
+  const [pixabaySearchQuery, setPixabaySearchQuery] = useState("cars");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dailyPuzzle, setDailyPuzzle] = useState<DailyPuzzle | null>(null);
+  const [dailyStats, setDailyStats] = useState<DailyStats>({});
+  const [showDailyComplete, setShowDailyComplete] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [handPosition, setHandPosition] = useState({
+    x: 0,
+    y: 0,
+    visible: false,
+  });
+  const [handAnimation, setHandAnimation] = useState<
+    "idle" | "moving" | "tapping"
+  >("idle");
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(theme);
+  const handRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const moveSoundRef = useRef<OscillatorNode | null>(null);
+  const snapSoundRef = useRef<OscillatorNode | null>(null);
+  const winSoundRef = useRef<OscillatorNode | null>(null);
 
-  // Initialize client-side
   useEffect(() => {
-    setIsClient(true);
-    lastScrollTime.current = Date.now();
-    
-    if (typeof window !== 'undefined') {
-      // Initialize from localStorage
-      const storedHighScore = localStorage.getItem('scrollOrDie_highScore');
-      if (storedHighScore) setHighScoreState(parseFloat(storedHighScore));
-      
-      const storedCoins = localStorage.getItem('scrollOrDie_totalCoins');
-      if (storedCoins) setTotalCoins(parseInt(storedCoins) || 0);
-      
-      const storedAchievements = localStorage.getItem('scrollOrDie_achievements');
-      if (storedAchievements) {
-        try {
-          setUnlockedAchievements(JSON.parse(storedAchievements));
-        } catch {
-          setUnlockedAchievements([]);
-        }
-      }
-      
-      // Initialize daily challenge
+    setThemeMode(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const loadLocalImages = () => {
       try {
-        const days = Math.floor(Date.now() / 86400000);
-        const idx = days % challengesPool.length;
-        const key = `scrollOrDie_challenge_${days}`;
-        const stored = localStorage.getItem(key);
-        if (stored) {
-          setTodayChallenge(JSON.parse(stored));
-        } else {
-          const choice = challengesPool[idx];
-          localStorage.setItem(key, JSON.stringify(choice));
-          setTodayChallenge(choice);
+        const savedImages = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (savedImages) {
+          const parsedImages: PuzzleItem[] = JSON.parse(savedImages);
+          setLocalImages(parsedImages);
+          if (activeTab === "local" && parsedImages.length > 0) {
+            setSelectedLocalImage(parsedImages[0]);
+          }
         }
-      } catch {
-        setTodayChallenge(challengesPool[0]);
-      }
-      
-      // Initialize streak
-      const last = localStorage.getItem('scrollOrDie_lastPlayed');
-      const currentStreak = localStorage.getItem('scrollOrDie_streak');
-      if (last && currentStreak) {
-        const lastTime = parseInt(last);
-        const now = Date.now();
-        const hoursDiff = (now - lastTime) / (1000 * 60 * 60);
-        if (hoursDiff < 24) {
-          setStreak(parseInt(currentStreak));
-        }
-      }
-    }
-  }, []);
-
-  // Audio setup - client only
-  useEffect(() => {
-    if (!isClient) return;
-    
-    try {
-      const bg = new Audio('/assets/play.wav');
-      bg.loop = true;
-      bg.volume = 0.45;
-      bg.preload = 'auto';
-      bg.muted = muted;
-      audioRef.current = bg;
-
-      const lost = new Audio('/assets/lost.wav');
-      lost.loop = false;
-      lost.volume = 0.9;
-      lost.preload = 'auto';
-      lost.muted = muted;
-      lostRef.current = lost;
-
-      return () => {
-        bg.pause();
-        lost.pause();
-        audioRef.current = null;
-        lostRef.current = null;
-      };
-    } catch (error) {
-      console.error('Audio setup failed:', error);
-    }
-  }, [isClient, muted]);
-
-  // Audio playback - FIXED AUTOPLAY
-  useEffect(() => {
-    if (!isClient || !audioRef.current) return;
-
-    const bg = audioRef.current;
-    
-    const tryPlay = () => {
-      if (gameState === 'playing' && !audioStarted) {
-        bg.muted = muted;
-        bg.play().catch((e) => {
-          console.log('Audio autoplay prevented, will play on user interaction');
-          // Audio will play on first user interaction
-        });
+      } catch (error) {
+        console.error("Failed to load local images:", error);
       }
     };
 
-    if (gameState === 'playing') {
-      bg.muted = muted;
-      if (!audioStarted) {
-        // Try to play immediately, but don't set audioStarted yet
-        bg.play().then(() => {
-          setAudioStarted(true);
-        }).catch(() => {
-          // Audio will be played on first user interaction
-        });
-      } else {
-        bg.play().catch(() => {});
-      }
-    } else {
-      bg.pause();
-      bg.currentTime = 0;
-    }
-  }, [gameState, muted, isClient, audioStarted]);
+    const loadDailyPuzzle = () => {
+      const today = new Date().toDateString();
+      const puzzle = getDailyPuzzle();
+      setDailyPuzzle(puzzle);
 
-  // Streak system
-  useEffect(() => {
-    if (gameState === 'dead' && isClient) {
-      const now = Date.now();
-      const last = localStorage.getItem('scrollOrDie_lastPlayed');
-      const currentStreak = localStorage.getItem('scrollOrDie_streak');
-      
-      if (last) {
-        const lastTime = parseInt(last);
-        const hoursDiff = (now - lastTime) / (1000 * 60 * 60);
-        
-        if (hoursDiff < 24) {
-          const newStreak = parseInt(currentStreak || '0');
-          setStreak(newStreak);
-        } else if (hoursDiff < 48) {
-          const newStreak = parseInt(currentStreak || '0') + 1;
-          setStreak(newStreak);
-          localStorage.setItem('scrollOrDie_streak', newStreak.toString());
-        } else {
-          setStreak(1);
-          localStorage.setItem('scrollOrDie_streak', '1');
+      const savedStats = localStorage.getItem(DAILY_STATS_KEY);
+      if (savedStats) {
+        const stats: DailyStats = JSON.parse(savedStats);
+        setDailyStats(stats);
+
+        if (stats[today]?.completed) {
+          setShowDailyComplete(true);
         }
-      } else {
-        setStreak(1);
-        localStorage.setItem('scrollOrDie_streak', '1');
       }
-      
-      localStorage.setItem('scrollOrDie_lastPlayed', now.toString());
-    }
-  }, [gameState, isClient]);
+    };
 
-  // Combo system
+    const loadSoundPref = () => {
+      const saved = localStorage.getItem(SOUND_ENABLED_KEY);
+      if (saved !== null) {
+        setSoundEnabled(saved === "true");
+      }
+    };
+
+    loadLocalImages();
+    loadDailyPuzzle();
+    loadSoundPref();
+  }, []);
+
   useEffect(() => {
-    if (coinScore > 0 && coinScore % 5 === 0) {
-      const newMultiplier = Math.min(3, 1 + Math.floor(coinScore / 5) * 0.2);
-      setComboMultiplier(newMultiplier);
-      setComboChain(prev => prev + 1);
-      setShowComboText(true);
-      setFlashEffect(true);
-      
-      setTimeout(() => setFlashEffect(false), 200);
-      setTimeout(() => setShowComboText(false), 1000);
-      
-      if (comboChain >= 3) {
-        setComboEffect({
-          type: ['speed', 'shield', 'magnet'][comboChain % 3] as any,
-          level: Math.min(3, Math.floor(comboChain / 3)),
-          timer: 300
-        });
-      }
+    if (localImages.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(localImages));
     }
-  }, [coinScore, comboChain]);
+  }, [localImages]);
 
-  // Sound effects
-  const playSound = useCallback((type: 'coin' | 'powerup' | 'death' | 'nearmiss' | 'start' | 'jar') => {
-    if (!isClient) return;
-    
+  useEffect(() => {
+    localStorage.setItem(SOUND_ENABLED_KEY, soundEnabled.toString());
+  }, [soundEnabled]);
+
+  const initAudio = useCallback(() => {
+    if (!audioContextRef.current && soundEnabled) {
+      audioContextRef.current = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+    }
+  }, [soundEnabled]);
+
+  const playMoveSound = useCallback(() => {
+    if (!soundEnabled || !audioContextRef.current) return;
+
     try {
-      if (typeof window === 'undefined') return;
-      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!Ctx) return;
-      
-      const ctx = new Ctx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      if (type === 'coin') {
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-        osc.start(); osc.stop(ctx.currentTime + 0.15);
-      } else if (type === 'powerup') {
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.35, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(); osc.stop(ctx.currentTime + 0.3);
-      } else if (type === 'death') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.5);
-        gain.gain.setValueAtTime(0.4, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-        osc.start(); osc.stop(ctx.currentTime + 0.5);
-      } else if (type === 'nearmiss') {
-        osc.frequency.setValueAtTime(600, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.18, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-        osc.start(); osc.stop(ctx.currentTime + 0.1);
-      } else if (type === 'start') {
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.setValueAtTime(550, ctx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-        osc.start(); osc.stop(ctx.currentTime + 0.4);
-      } else if (type === 'jar') {
-        osc.frequency.setValueAtTime(330, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-        osc.start(); osc.stop(ctx.currentTime + 0.3);
+      if (moveSoundRef.current) {
+        moveSoundRef.current.stop();
       }
+
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(
+        600,
+        audioContextRef.current.currentTime
+      );
+      oscillator.frequency.exponentialRampToValueAtTime(
+        400,
+        audioContextRef.current.currentTime + 0.05
+      );
+
+      gainNode.gain.setValueAtTime(0.05, audioContextRef.current.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioContextRef.current.currentTime + 0.05
+      );
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+
+      oscillator.start();
+      oscillator.stop(audioContextRef.current.currentTime + 0.1);
+
+      moveSoundRef.current = oscillator;
     } catch (e) {
-      console.error('Sound error:', e);
+      console.warn("Audio context error:", e);
     }
-  }, [isClient]);
+  }, [soundEnabled]);
 
-  const toggleMute = () => {
-    if (!audioRef.current) return;
-    const newMuted = !audioRef.current.muted;
-    audioRef.current.muted = newMuted;
-    if (lostRef.current) lostRef.current.muted = newMuted;
-    setMuted(newMuted);
-    
-    // Force audio to start playing when user first interacts
-    if (!audioStarted && isClient && audioRef.current) {
-      audioRef.current.play().then(() => {
-        setAudioStarted(true);
-      }).catch(() => {});
-    }
-  };
+  const playSnapSound = useCallback(() => {
+    if (!soundEnabled || !audioContextRef.current) return;
 
-  // Game logic helpers
-  const getDifficulty = useCallback((time: number) => {
-    if (time < 5) return { speed: 1, spawnRate: 2000, label: 'Chill' };
-    if (time < 15) return { speed: 1.3, spawnRate: 1500, label: 'Focus' };
-    if (time < 25) return { speed: 1.7, spawnRate: 1200, label: 'Panic' };
-    return { speed: 2.2, spawnRate: 900, label: 'Chaos' };
-  }, []);
-
-  const saveCoinsCollected = useCallback((c: number) => {
-    if (!isClient) return;
     try {
-      localStorage.setItem('scrollOrDie_totalCoins', c.toString());
-    } catch {}
-  }, [isClient]);
-
-  const checkAchievement = useCallback((id: string) => {
-    if (!unlockedAchievements.includes(id)) {
-      const a = achievementDefs.find(x => x.id === id);
-      if (a) {
-        const updated = [...unlockedAchievements, id];
-        if (isClient) {
-          try {
-            localStorage.setItem('scrollOrDie_achievements', JSON.stringify(updated));
-          } catch {}
-        }
-        setUnlockedAchievements(updated);
-        setNewAchievement({ ...a, unlocked: true });
-        setTimeout(() => setNewAchievement(null), 2500);
-      }
-    }
-  }, [unlockedAchievements, isClient]);
-
-  // Particle effects
-  const createDeathParticles = useCallback((x: number, y: number) => {
-    const newParticles: Particle[] = [];
-    for (let i = 0; i < 20; i++) {
-      newParticles.push({
-        id: i,
-        x,
-        y,
-        vx: (Math.random() - 0.5) * 8,
-        vy: (Math.random() - 0.5) * 8,
-        life: 1,
-        color: '#00FFFF',
-        size: 3,
-      });
-    }
-    setParticles(newParticles);
-  }, []);
-
-  const createParticles = useCallback((x: number, y: number, color: string, count: number, spread: number) => {
-    const newParticles: Particle[] = [];
-    for (let i = 0; i < count; i++) {
-      newParticles.push({
-        id: particleIdRef.current++,
-        x, y,
-        vx: (Math.random() - 0.5) * spread,
-        vy: (Math.random() - 0.5) * spread,
-        life: 1,
-        color,
-        size: Math.random() * 4 + 2,
-      });
-    }
-    setParticles(p => [...p, ...newParticles]);
-  }, []);
-
-  const addTrailParticle = useCallback((x: number, y: number) => {
-    const newParticle: Particle = {
-      id: particleIdRef.current++,
-      x, y,
-      vx: -0.5,
-      vy: (Math.random() - 0.5) * 0.5,
-      life: 0.6,
-      color: hasShield ? 'hsl(280 90% 60%)' : 'hsl(200 90% 60%)',
-      size: 3,
-    };
-    setTrailParticles(p => [...p.slice(-20), newParticle]);
-  }, [hasShield]);
-
-  // Death handler
-  const handleDeath = useCallback((playerX: number, playerYPos: number) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    
-    if (lostRef.current && isClient) {
-      lostRef.current.muted = muted;
-      lostRef.current.currentTime = 0;
-      lostRef.current.play().catch(() => {});
-    }
-    
-    setGameState('dead');
-    const finalScore = score * scoreMultiplier;
-    const message = deathMessages[Math.floor(Math.random() * deathMessages.length)];
-    setDeathMessage(message);
-    createDeathParticles(playerX, playerYPos);
-    
-    if (todayChallenge && todayChallenge.type === 'survive' && isClient) {
-      try {
-        const days = Math.floor(Date.now() / 86400000);
-        const key = `scrollOrDie_challenge_${days}`;
-        const updated = { 
-          ...todayChallenge, 
-          progress: Math.min(todayChallenge.target, Math.floor(score)) 
-        };
-        setTodayChallenge(updated);
-        localStorage.setItem(key, JSON.stringify(updated));
-      } catch {}
-    }
-
-    if (finalScore > highScore) {
-      setHighScore(finalScore);
-      setHighScoreState(finalScore);
-      setIsNewRecord(true);
-      if (isClient) {
-        setHighScore(finalScore);
-      }
-    } else {
-      setIsNewRecord(false);
-    }
-  }, [score, highScore, createDeathParticles, muted, scoreMultiplier, todayChallenge, isClient]);
-
-  // Spawn functions
-  const spawnObstacle = useCallback(() => {
-    const types: Array<'bar' | 'gap' | 'double'> = ['bar', 'gap', 'double'];
-    const type = types[Math.floor(Math.random() * types.length)];
-    const id = obstacleIdRef.current++;
-    
-    let obstacle: Obstacle = { id, x: 105, type };
-    
-    if (type === 'bar') {
-      obstacle.gapY = Math.random() * 60 + 20;
-      obstacle.gapHeight = GAP_SIZE;
-    } else if (type === 'gap') {
-      obstacle.gapY = Math.random() * 50 + 25;
-      obstacle.gapHeight = GAP_SIZE + 5;
-    } else {
-      obstacle.topHeight = Math.random() * 20 + 15;
-      obstacle.bottomY = Math.random() * 20 + 65;
-    }
-    
-    return obstacle;
-  }, []);
-
-  const spawnCoin = useCallback((gapY: number) => {
-    const id = coinIdRef.current++;
-    return { id, x: 110, y: gapY + (Math.random() - 0.5) * 15, collected: false } as Coin;
-  }, []);
-
-  const spawnPowerUp = useCallback(() => {
-    const types: PowerUpType[] = ['shield', 'magnet', 'slowmo', 'double'];
-    const type = types[Math.floor(Math.random() * types.length)];
-    const id = powerUpIdRef.current++;
-    return { id, x: 110, y: Math.random() * 60 + 20, type, collected: false } as PowerUp;
-  }, []);
-
-  const spawnMeteor = useCallback(() => {
-    const id = meteorIdRef.current++;
-    const side = Math.floor(Math.random() * 4);
-    let x = 50, y = 50;
-    const size = 3 + Math.random() * 5;
-
-    if (side === 0) {
-      x = Math.random() * 120 - 10;
-      y = -8;
-    } else if (side === 1) {
-      x = 110;
-      y = Math.random() * 120 - 10;
-    } else if (side === 2) {
-      x = Math.random() * 120 - 10;
-      y = 110;
-    } else {
-      x = -8;
-      y = Math.random() * 120 - 10;
-    }
-
-    const degToRad = (d: number) => (d * Math.PI) / 180;
-    let angleDeg = 0;
-    if (side === 0) angleDeg = 20 + Math.random() * 120;
-    if (side === 1) angleDeg = 110 + Math.random() * 140;
-    if (side === 2) angleDeg = 200 + Math.random() * 140;
-    if (side === 3) angleDeg = -70 + Math.random() * 140;
-
-    const speed = 0.6 + Math.random() * 1.2;
-    const vx = Math.cos(degToRad(angleDeg)) * speed;
-    const vy = Math.sin(degToRad(angleDeg)) * speed;
-
-    const rot = Math.random() * 360;
-    const vrot = (Math.random() - 0.5) * 6;
-
-    return { id, x, y, vx, vy, size, rot, vrot } as Meteor;
-  }, []);
-
-  // Activate immunity from jar
-  const activateImmunity = useCallback(() => {
-    setIsImmune(true);
-    immunityStartTime.current = Date.now();
-    setImmunityRemaining(5.0);
-    playSound('jar');
-    createParticles(15, playerYRef.current, '#4ade80', 15, 4);
-  }, [playSound, createParticles]);
-
-  // Power-up activation
-  const activatePowerUp = useCallback((type: PowerUpType) => {
-    const duration = 300;
-    switch (type) {
-      case 'shield': 
-        setHasShield(true); 
-        setShieldTimer(duration);
-        setScreenTint('rgba(120, 90, 255, 0.1)');
-        setTimeout(() => setScreenTint('transparent'), 1000);
-        break;
-      case 'slowmo': 
-        setHasSlowmo(true); 
-        setSlowmoTimer(duration);
-        setScreenTint('rgba(90, 200, 255, 0.1)');
-        setTimeout(() => setScreenTint('transparent'), 1000);
-        break;
-      case 'double':
-        setHasDouble(true); 
-        setDoubleTimer(duration);
-        setScoreMultiplier(2);
-        setShowDoublePopup(true);
-        setRumbleEffect(true);
-        setTimeout(() => setRumbleEffect(false), 500);
-        setTimeout(() => setShowDoublePopup(false), 2200);
-        break;
-      case 'magnet': 
-        setHasMagnet(true); 
-        setMagnetTimer(duration);
-        setScreenTint('rgba(255, 90, 200, 0.1)');
-        setTimeout(() => setScreenTint('transparent'), 1000);
-        break;
-    }
-  }, []);
-
-  const getPowerUpColor = (type: PowerUpType) => {
-    switch (type) {
-      case 'shield': return 'hsl(280 90% 60%)';
-      case 'slowmo': return 'hsl(180 90% 50%)';
-      case 'double': return 'hsl(45 100% 50%)';
-      case 'magnet': return 'hsl(320 90% 55%)';
-      default: return 'hsl(0 0% 100%)';
-    }
-  };
-
-  const getPowerUpIcon = (type: PowerUpType) => {
-    switch (type) {
-      case 'shield': return '🛡️';
-      case 'slowmo': return '⏱️';
-      case 'double': return '2️⃣';
-      case 'magnet': return '🧲';
-      default: return '⚡';
-    }
-  };
-
-  // Collision detection
-  const checkCollision = useCallback((pY: number, obs: Obstacle[]): boolean => {
-    if (isImmune) return false;
-    
-    const playerLeft = 15;
-    const playerRight = 15 + 4;
-    const playerTop = pY - 2;
-    const playerBottom = pY + 2;
-
-    for (const o of obs) {
-      const obsLeft = o.x - 3;
-      const obsRight = o.x + 3;
-
-      if (playerRight > obsLeft && playerLeft < obsRight) {
-        if (o.type === 'bar' || o.type === 'gap') {
-          const gapTop = (o.gapY || 50) - (o.gapHeight || GAP_SIZE) / 2;
-          const gapBottom = (o.gapY || 50) + (o.gapHeight || GAP_SIZE) / 2;
-          if (playerTop < gapTop || playerBottom > gapBottom) {
-            return true;
-          }
-        } else if (o.type === 'double') {
-          if (playerTop < (o.topHeight || 20) || playerBottom > (o.bottomY || 80)) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  }, [isImmune]);
-
-  const checkMeteorCollision = useCallback((pY: number, ms: Meteor[]) => {
-    if (isImmune) return false;
-    
-    const px = 15;
-    const pr = 2.5;
-    for (const m of ms) {
-      const dx = Math.abs(m.x - px);
-      const dy = Math.abs(m.y - pY);
-      const mr = m.size / 2;
-      if (Math.sqrt(dx * dx + dy * dy) < (mr + pr)) return true;
-    }
-    return false;
-  }, [isImmune]);
-
-  // Main game loop
-  useEffect(() => {
-    if (gameState !== 'playing' || !isClient) return;
-
-    let lastTime = 0;
-    
-    const loop = (currentTime: number) => {
-      const deltaTime = lastTime ? Math.min((currentTime - lastTime) / 16.67, 2) : 1;
-      lastTime = currentTime;
-      
-      const now = Date.now();
-      const elapsed = (now - gameStartTime.current) / 1000;
-      const difficulty = getDifficulty(elapsed);
-      const modeFactor = difficultyMode === 'Easy' ? 0.8 : difficultyMode === 'Hard' ? 1.4 : 1;
-      const adjSpeed = difficulty.speed * modeFactor;
-
-      setScore(elapsed);
-      
-      // Update immunity timer
-      if (isImmune && immunityStartTime.current) {
-        const immunityElapsed = (now - immunityStartTime.current) / 1000;
-        const remaining = Math.max(0, 5 - immunityElapsed);
-        setImmunityRemaining(remaining);
-        
-        if (remaining <= 0) {
-          setIsImmune(false);
-          immunityStartTime.current = null;
-          setImmunityRemaining(0);
-        }
+      if (snapSoundRef.current) {
+        snapSoundRef.current.stop();
       }
 
-      // Visual effects
-      setGradientHue(270 + Math.min(90, elapsed * 1.6));
-      setStarOffset(prev => ({
-        a: (prev.a + (velocityRef.current || 0) * 0.08 + elapsed * 0.02) % 100,
-        b: (prev.b + (velocityRef.current || 0) * 0.14 + elapsed * 0.04) % 100,
-        c: (prev.c + (velocityRef.current || 0) * 0.22 + elapsed * 0.06) % 100,
-      }));
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
 
-      // Physics
-      setVelocity(v => {
-        const newV = (v + GRAVITY * deltaTime) * Math.pow(FRICTION, deltaTime);
-        const clamped = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, newV));
-        velocityRef.current = clamped;
-        return clamped;
-      });
-
-      // Player movement
-      setPlayerY(y => {
-        const newY = y + velocityRef.current * deltaTime;
-        
-        if (Math.random() < 0.28 * deltaTime) {
-          addTrailParticle(15, newY);
-        }
-        
-        if (newY < 5 || newY > 95) {
-          handleDeath(15, newY);
-          return Math.max(5, Math.min(95, newY));
-        }
-        return newY;
-      });
-
-      // Spawn obstacles
-      if (now - lastObstacleTime.current > (difficulty.spawnRate / modeFactor)) {
-        const newObs = spawnObstacle();
-        setObstacles(obs => [...obs, newObs]);
-        if (Math.random() < 0.6) setCoins(c => [...c, spawnCoin(newObs.gapY || 50)]);
-        lastObstacleTime.current = now;
-      }
-
-      // Spawn jars (immunity)
-      if (now - lastJarTime.current > 8000 + Math.random() * 6000) {
-        const id = jarIdRef.current++;
-        const newJar: Jar = { id, x: 105, y: Math.random() * 80 + 10 };
-        setJars(j => [...j, newJar]);
-        lastJarTime.current = now;
-      }
-
-      // Spawn meteors
-      if (now - lastMeteorTime.current > 10000 + Math.random() * 8000) {
-        setMeteors(ms => [...ms, spawnMeteor()]);
-        lastMeteorTime.current = now;
-      }
-
-      // Spawn power-ups
-      if (now - lastPowerUpTime.current > 10000 && Math.random() < 0.25) {
-        setPowerUps(p => [...p, spawnPowerUp()]);
-        lastPowerUpTime.current = now;
-      }
-
-      // Update obstacles
-      setObstacles(obs => {
-        const speed = BASE_OBSTACLE_SPEED * adjSpeed * deltaTime;
-        return obs
-          .map(o => ({ ...o, x: o.x - speed }))
-          .filter(o => o.x > -10);
-      });
-
-      // Update jars
-      setJars(js => {
-        const speed = BASE_OBSTACLE_SPEED * adjSpeed * deltaTime;
-        return js
-          .map(j => ({ ...j, x: j.x - speed }))
-          .filter(j => j.x > -10);
-      });
-
-      // Update coins with magnet effect
-      setCoins(prev => {
-        const speed = BASE_OBSTACLE_SPEED * adjSpeed * deltaTime;
-        const remaining: Coin[] = [];
-        prev.forEach(coin => {
-          if (coin.collected) return;
-          let newX = coin.x - speed;
-          let newY = coin.y;
-          
-          if (hasMagnet) {
-            const dx = 15 - coin.x;
-            const dy = playerYRef.current - coin.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 30) {
-              newX += dx * 0.15 * deltaTime;
-              newY += dy * 0.15 * deltaTime;
-            }
-          }
-
-          const dxP = 15 - newX;
-          const dyP = playerYRef.current - newY;
-          const distP = Math.sqrt(dxP * dxP + dyP * dyP);
-          if (distP < 4.5) {
-            const gained = hasDouble ? 2 : 1;
-            setCoinScore(s => s + gained);
-            setTotalCoins(tc => { 
-              const n = tc + gained; 
-              saveCoinsCollected(n); 
-              return n; 
-            });
-            playSound('coin');
-            createParticles(15, newY, '#FFD700', 8, 2);
-            
-            if (todayChallenge && todayChallenge.type === 'collect' && isClient) {
-              try {
-                const days = Math.floor(Date.now() / 86400000);
-                const key = `scrollOrDie_challenge_${days}`;
-                const updated = { 
-                  ...todayChallenge, 
-                  progress: Math.min(todayChallenge.target, todayChallenge.progress + 1) 
-                };
-                setTodayChallenge(updated);
-                localStorage.setItem(key, JSON.stringify(updated));
-              } catch {}
-            }
-          } else {
-            if (newX > -10) remaining.push({ ...coin, x: newX, y: newY });
-          }
-        });
-        return remaining;
-      });
-
-      // Check jar collection
-      setJars(js => {
-        const remaining: Jar[] = [];
-        js.forEach(jar => {
-          const dx = Math.abs(jar.x - 15);
-          const dy = Math.abs(jar.y - playerYRef.current);
-          
-          if (dx < 4 && dy < 6) {
-            // Jar collected!
-            activateImmunity();
-            createParticles(jar.x, jar.y, '#4ade80', 12, 6);
-          } else {
-            remaining.push(jar);
-          }
-        });
-        return remaining.filter(j => j.x > -10);
-      });
-
-      // Update power-ups
-      setPowerUps(p => {
-        const speed = BASE_OBSTACLE_SPEED * adjSpeed * deltaTime;
-        return p.map(pu => ({ ...pu, x: pu.x - speed }))
-                .filter(pu => pu.x > -10 && !pu.collected);
-      });
-
-      // Check power-up collection
-      setPowerUps(p => {
-        return p.map(pu => {
-          if (pu.collected) return pu;
-          const dx = 15 - pu.x;
-          const dy = playerYRef.current - pu.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 6) {
-            playSound('powerup');
-            createParticles(pu.x, pu.y, getPowerUpColor(pu.type), 12, 8);
-            setUsedPowerUps(prev => new Set([...prev, pu.type]));
-            activatePowerUp(pu.type);
-            return { ...pu, collected: true };
-          }
-          return pu;
-        });
-      });
-
-      // Check collisions
-      const hitObstacle = checkCollision(playerYRef.current, obstacles);
-      const hitMeteor = checkMeteorCollision(playerYRef.current, meteors);
-      
-      if (hitObstacle || hitMeteor) {
-        handleDeath(15, playerYRef.current);
-      }
-
-      // Update danger level
-      setDangerLevel(d => Math.max(0, d - 0.02 * deltaTime));
-
-      // Update meteors
-      setMeteors(ms => {
-        return ms
-          .map(m => ({ 
-            ...m, 
-            x: m.x + m.vx * deltaTime, 
-            y: m.y + m.vy * deltaTime, 
-            rot: (m.rot + m.vrot * deltaTime) % 360 
-          }))
-          .filter(m => m.x > -20 && m.x < 120 && m.y > -20 && m.y < 120);
-      });
-
-      animationRef.current = requestAnimationFrame(loop);
-    };
-
-    animationRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, [
-    gameState, isImmune, difficultyMode, getDifficulty, spawnObstacle, spawnCoin, 
-    spawnPowerUp, spawnMeteor, checkCollision, checkMeteorCollision, handleDeath, 
-    playSound, createParticles, addTrailParticle, activatePowerUp, activateImmunity,
-    hasMagnet, hasDouble, todayChallenge, isClient, saveCoinsCollected
-  ]);
-
-  // Particle updates
-  useEffect(() => {
-    if (!isClient || (particles.length === 0 && trailParticles.length === 0)) return;
-
-    const interval = setInterval(() => {
-      setParticles(p =>
-        p.map(particle => ({
-          ...particle,
-          x: particle.x + particle.vx,
-          y: particle.y + particle.vy,
-          life: particle.life - 0.05,
-        })).filter(particle => particle.life > 0)
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(
+        800,
+        audioContextRef.current.currentTime
       );
-      setTrailParticles(tp =>
-        tp.map(particle => ({
-          ...particle,
-          x: particle.x + particle.vx,
-          life: particle.life - 0.08,
-        })).filter(particle => particle.life > 0)
+      oscillator.frequency.exponentialRampToValueAtTime(
+        200,
+        audioContextRef.current.currentTime + 0.1
       );
-    }, 30);
 
-    return () => clearInterval(interval);
-  }, [particles.length, trailParticles.length, isClient]);
+      gainNode.gain.setValueAtTime(0.08, audioContextRef.current.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioContextRef.current.currentTime + 0.15
+      );
 
-  // Sync refs
-  useEffect(() => { 
-    playerYRef.current = playerY; 
-  }, [playerY]);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
 
-  // Power-up timers
-  useEffect(() => {
-    if (!isClient) return;
-    
-    let iv: number | undefined;
-    const active = shieldTimer > 0 || slowmoTimer > 0 || doubleTimer > 0 || magnetTimer > 0;
-    if (!active) return;
-    
-    iv = window.setInterval(() => {
-      setShieldTimer(s => Math.max(0, s - 1));
-      setSlowmoTimer(s => Math.max(0, s - 1));
-      setMagnetTimer(s => Math.max(0, s - 1));
-      setDoubleTimer(s => {
-        const ns = Math.max(0, s - 1);
-        if (ns === 0) {
-          setHasDouble(false);
-          setScoreMultiplier(1);
-        }
-        return ns;
-      });
-      if (shieldTimer <= 1) setHasShield(false);
-      if (slowmoTimer <= 1) setHasSlowmo(false);
-      if (magnetTimer <= 1) setHasMagnet(false);
-    }, 1000 / 60);
+      oscillator.start();
+      oscillator.stop(audioContextRef.current.currentTime + 0.15);
 
-    return () => { if (iv) clearInterval(iv); };
-  }, [shieldTimer, slowmoTimer, doubleTimer, magnetTimer, isClient]);
+      snapSoundRef.current = oscillator;
+    } catch (e) {
+      console.warn("Audio context error:", e);
+    }
+  }, [soundEnabled]);
 
-  // Input handling
-  const handleInput = useCallback((delta: number, isTouch = false) => {
-    if (gameState === 'start') {
-      setGameState('playing');
-      gameStartTime.current = Date.now();
-      lastObstacleTime.current = Date.now();
-      lastCoinTime.current = Date.now();
-      lastPowerUpTime.current = Date.now();
-      playSound('start');
-      
-      // Start audio on first user interaction
-      if (!audioStarted && audioRef.current) {
-        audioRef.current.play().then(() => {
-          setAudioStarted(true);
-        }).catch(() => {});
+  const playWinSound = useCallback(() => {
+    if (!soundEnabled || !audioContextRef.current) return;
+
+    try {
+      if (winSoundRef.current) {
+        winSoundRef.current.stop();
       }
+
+      const now = audioContextRef.current.currentTime;
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(523.25, now); // C5
+      oscillator.frequency.setValueAtTime(659.25, now + 0.1); // E5
+      oscillator.frequency.setValueAtTime(783.99, now + 0.2); // G5
+
+      gainNode.gain.setValueAtTime(0, now);
+      gainNode.gain.linearRampToValueAtTime(0.1, now + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+
+      oscillator.start();
+      oscillator.stop(now + 0.5);
+
+      winSoundRef.current = oscillator;
+    } catch (e) {
+      console.warn("Audio context error:", e);
+    }
+  }, [soundEnabled]);
+
+  const animateHandToTile = useCallback(
+    (tileIndex: number) => {
+      if (!isPlaying || hasWon || !handRef.current) return;
+
+      const board = document.querySelector("[data-game-board]");
+      if (!board) return;
+
+      const boardRect = board.getBoundingClientRect();
+      const row = Math.floor(tileIndex / gridSize);
+      const col = tileIndex % gridSize;
+
+      // Adjust these offsets to position the hand properly over tiles
+      // -20 and -40 centers the hand over the tile (assuming hand.png is ~48x48)
+      const x = boardRect.left + col * (tileSize + 4) + tileSize / 2 - 24;
+      const y = boardRect.top + row * (tileSize + 4) + tileSize / 2 - 24;
+
+      setHandPosition({ x, y, visible: true });
+      setHandAnimation("moving");
+
+      setTimeout(() => {
+        setHandAnimation("tapping");
+        setTimeout(() => {
+          setHandAnimation("idle");
+          setTimeout(() => {
+            setHandPosition((prev) => ({ ...prev, visible: false }));
+          }, 200);
+        }, 80);
+      }, 120);
+    },
+    [isPlaying, hasWon, gridSize, tileSize]
+  );
+
+  const fetchPixabayImages = async (query: string = "cars") => {
+    const hasBlockedKeyword = BLOCKED_KEYWORDS.some((keyword) =>
+      query.toLowerCase().includes(keyword.toLowerCase())
+    );
+
+    if (hasBlockedKeyword) {
+      setPixabayError(
+        "Search query contains blocked keywords. Please try a different search."
+      );
+      setPixabayImages([]);
       return;
     }
 
-    if (gameState === 'playing') {
-      const now = Date.now();
-      const timeDiff = Math.max(1, now - lastScrollTime.current);
-      
-      const scrollSpeed = Math.abs(delta) / timeDiff;
-      const danger = Math.min(1, scrollSpeed / (isTouch ? 30 : 5));
-      setDangerLevel(d => Math.min(1, d + danger * 0.3));
+    setIsLoadingPixabay(true);
+    setPixabayError(null);
 
-      const forceMultiplier = isTouch ? 0.12 : 0.08;
-      const scrollForce = -delta * SCROLL_SENSITIVITY * forceMultiplier;
-      
-      setVelocity(v => {
-        const newV = v + scrollForce;
-        const clamped = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, newV));
-        velocityRef.current = clamped;
-        return clamped;
-      });
-
-      lastScrollTime.current = now;
-    }
-  }, [gameState, playSound, audioStarted]);
-
-  // Wheel (desktop) handler
-  useEffect(() => {
-    if (!isClient) return;
-    
-    const gameEl = gameRef.current;
-    if (!gameEl) return;
-
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      handleInput(e.deltaY, false);
-    };
-
-    gameEl.addEventListener('wheel', handleWheel, { passive: false });
-    return () => gameEl.removeEventListener('wheel', handleWheel);
-  }, [handleInput, isClient]);
-
-  // TOUCH HANDLERS - FIXED FOR MOBILE
-  useEffect(() => {
-    if (!isClient) return;
-    
-    const gameEl = gameRef.current;
-    if (!gameEl) return;
-
-    const handleTouchStart = (e: TouchEvent) => {
-      // Don't prevent default on all touch events - only on the game area
-      const target = e.target as HTMLElement;
-      const isButton = target.closest('button');
-      
-      if (!isButton) {
-        e.preventDefault();
-      }
-      
-      if (e.touches.length > 0) {
-        isTouchingRef.current = true;
-        touchStartYRef.current = e.touches[0].clientY;
-        lastTouchMoveTime.current = Date.now();
-        
-        if (gameState === 'start') {
-          setGameState('playing');
-          gameStartTime.current = Date.now();
-          lastObstacleTime.current = Date.now();
-          playSound('start');
-          
-          // Start audio on touch
-          if (!audioStarted && audioRef.current) {
-            audioRef.current.play().then(() => {
-              setAudioStarted(true);
-            }).catch(() => {});
-          }
-        }
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isTouchingRef.current || e.touches.length === 0) return;
-      e.preventDefault();
-      
-      const currentY = e.touches[0].clientY;
-      const currentTime = Date.now();
-      const deltaY = touchStartYRef.current - currentY;
-      const timeDiff = Math.max(1, currentTime - lastTouchMoveTime.current);
-      
-      // Apply input with momentum
-      handleInput(deltaY * 0.5, true);
-      
-      touchStartYRef.current = currentY;
-      lastTouchMoveTime.current = currentTime;
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      isTouchingRef.current = false;
-      // Don't prevent default on touch end to allow button clicks
-      
-      // Apply gentle deceleration
-      setTimeout(() => {
-        setVelocity(v => v * 0.95);
-      }, 50);
-    };
-
-    // Also handle mouse for desktop touchscreens
-    const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const isButton = target.closest('button');
-      
-      if (!isButton && gameState === 'start') {
-        setGameState('playing');
-        gameStartTime.current = Date.now();
-        lastObstacleTime.current = Date.now();
-        playSound('start');
-        
-        // Start audio on click
-        if (!audioStarted && audioRef.current) {
-          audioRef.current.play().then(() => {
-            setAudioStarted(true);
-          }).catch(() => {});
-        }
-      }
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (e.buttons === 1) { // Left mouse button pressed
-        const deltaY = e.movementY;
-        handleInput(deltaY * 2, false);
-      }
-    };
-
-    // Add all event listeners
-    gameEl.addEventListener('touchstart', handleTouchStart, { passive: false });
-    gameEl.addEventListener('touchmove', handleTouchMove, { passive: false });
-    gameEl.addEventListener('touchend', handleTouchEnd);
-    gameEl.addEventListener('mousedown', handleMouseDown);
-    gameEl.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      gameEl.removeEventListener('touchstart', handleTouchStart);
-      gameEl.removeEventListener('touchmove', handleTouchMove);
-      gameEl.removeEventListener('touchend', handleTouchEnd);
-      gameEl.removeEventListener('mousedown', handleMouseDown);
-      gameEl.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [gameState, handleInput, playSound, isClient, audioStarted]);
-
-  // Reset game
-  const resetGame = () => {
-    // Start audio if not already started
-    if (!audioStarted && audioRef.current) {
-      audioRef.current.play().then(() => {
-        setAudioStarted(true);
-      }).catch(() => {});
-    }
-    
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    if (lostRef.current) {
-      lostRef.current.pause();
-      lostRef.current.currentTime = 0;
-    }
-
-    setGameState('start');
-    setPlayerY(50);
-    setVelocity(0);
-    velocityRef.current = 0;
-    setObstacles([]);
-    setScore(0);
-    setParticles([]);
-    setDangerLevel(0);
-    setIsNewRecord(false);
-    setIsImmune(false);
-    setImmunityRemaining(0);
-    immunityStartTime.current = null;
-    obstacleIdRef.current = 0;
-    setCoins([]);
-    setPowerUps([]);
-    setTrailParticles([]);
-    coinIdRef.current = 0;
-    powerUpIdRef.current = 0;
-    particleIdRef.current = 0;
-    setCoinScore(0);
-    setCombo(0);
-    setShowCombo(false);
-    setNearMissCount(0);
-    setUsedPowerUps(new Set());
-    setJars([]);
-    setMeteors([]);
-    setHasShield(false);
-    setHasSlowmo(false);
-    setHasDouble(false);
-    setHasMagnet(false);
-    setScoreMultiplier(1);
-    setShieldTimer(0);
-    setSlowmoTimer(0);
-    setDoubleTimer(0);
-    setMagnetTimer(0);
-    setShowDoublePopup(false);
-    setComboEffect(null);
-    setComboChain(0);
-    setComboMultiplier(1);
-    setFlashEffect(false);
-    setRumbleEffect(false);
-    setScreenTint('transparent');
-  };
-
-  // Share function - FIXED FOR MOBILE CLICKS
-  const shareScore = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event bubbling
-    
-    if (!isClient) return;
-    
     try {
-      const pageUrl = window.location.href;
-      const finalScore = score * scoreMultiplier;
-      const hashtags = ['ScrollyGameJam', 'NoCodeJam', 'ScrollOrDie'];
-      const randomHashtag = hashtags[Math.floor(Math.random() * hashtags.length)];
-      
-      const text = `🎮 I scored ${finalScore.toFixed(1)}s in #ScrollOrDie! ${hashtagChallenge} ${randomHashtag}\n\nCan you beat my score? ${pageUrl}`;
-      const intent = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}`;
-      
-      // Use window.open for better mobile compatibility
-      const newWindow = window.open(intent, '_blank', 'noopener,noreferrer');
-      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        // Fallback for mobile browsers
-        window.location.href = intent;
+      const response = await fetch(
+        `https://pixabay.com/api/?key=53975878-5d7d727c6bb39bcca76fb0c39&q=${encodeURIComponent(
+          query
+        )}&safesearch=true&per_page=8&image_type=photo&category=nature,animals,buildings,backgrounds,food,travel,transportation&orientation=square&min_width=300&min_height=300`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
       }
-    } catch (e) {
-      // Fallback to simple tweet URL
-      window.open('https://x.com/intent/tweet', '_blank', 'noopener,noreferrer');
+
+      const data = await response.json();
+
+      if (data.hits && data.hits.length > 0) {
+        const pixabayImagesData = data.hits
+          .slice(0, 8)
+          .map((image: any, index: number) => ({
+            id: index + 1000,
+            name: image.tags?.split(",")[0] || "Pixabay Image",
+            imageUrl:
+              image.webformatURL || image.largeImageURL || image.previewURL,
+            symbol: `IMG${index + 1}`,
+          }));
+
+        setPixabayImages(pixabayImagesData);
+        if (activeTab === "create" && pixabayImagesData.length > 0) {
+          setSelectedPixabayImage(pixabayImagesData[0]);
+        }
+      } else {
+        setPixabayImages([]);
+        setPixabayError("No images found. Try a different search term.");
+      }
+    } catch (error: any) {
+      console.error("Failed to fetch Pixabay images:", error);
+      setPixabayError("Unable to load images. Try again later.");
+      setPixabayImages([]);
+    } finally {
+      setIsLoadingPixabay(false);
     }
   };
 
-  const startFromModal = () => {
-    setShowInstructions(false);
-    if (gameState === 'start') {
-      setGameState('playing');
-      gameStartTime.current = Date.now();
-      lastObstacleTime.current = Date.now();
-      lastCoinTime.current = Date.now();
-      lastPowerUpTime.current = Date.now();
-      
-      // Start audio
-      if (!audioStarted && audioRef.current) {
-        audioRef.current.play().then(() => {
-          setAudioStarted(true);
-        }).catch(() => {});
+  useEffect(() => {
+    if (activeTab === "create") {
+      fetchPixabayImages("cars");
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowSplash(false), 2000);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    initAudio();
+  }, [initAudio]);
+
+  const isSolvable = (arr: number[], size: number): boolean => {
+    let inversions = 0;
+    const filtered = arr.filter((n) => n !== 0);
+    for (let i = 0; i < filtered.length; i++) {
+      for (let j = i + 1; j < filtered.length; j++) {
+        if (filtered[i] > filtered[j]) inversions++;
       }
+    }
+    if (size % 2 === 1) return inversions % 2 === 0;
+    const blankRow = Math.floor(arr.indexOf(0) / size);
+    return (inversions + blankRow) % 2 === 1;
+  };
+
+  const isSolved = (arr: number[]): boolean => {
+    for (let i = 0; i < arr.length - 1; i++) {
+      if (arr[i] !== i + 1) return false;
+    }
+    return arr[arr.length - 1] === 0;
+  };
+
+  const startGame = (size?: number, isDaily: boolean = false) => {
+    let selectedItem: PuzzleItem | null;
+
+    if (isDaily && dailyPuzzle) {
+      selectedItem = PUZZLE_IMAGES[dailyPuzzle.imageIndex];
+      setGridSize(dailyPuzzle.gridSize);
+      setActiveTab("main");
+    } else {
+      switch (activeTab) {
+        case "main":
+          selectedItem = selectedMain;
+          break;
+        case "create":
+          selectedItem = selectedPixabayImage;
+          break;
+        case "local":
+          selectedItem = selectedLocalImage;
+          break;
+        default:
+          selectedItem = selectedMain;
+      }
+    }
+
+    if (!selectedItem) {
+      alert(`Please select an image first!`);
+      return;
+    }
+
+    const newSize = size ?? gridSize;
+    if (size) setGridSize(size);
+    const newTiles = Array.from({ length: newSize * newSize }, (_, i) => i);
+    let arr: number[];
+    do {
+      arr = [...newTiles];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    } while (!isSolvable(arr, newSize) || isSolved(arr));
+    setTiles(arr);
+    setMoves(0);
+    setSeconds(0);
+    setIsPlaying(true);
+    setHasWon(false);
+    setShowImagePicker(false);
+    setShowDailyComplete(false);
+
+    if (isDaily) {
+      setSelectedMain(selectedItem);
     }
   };
 
-  // Theme styles
-  const getThemeStyles = () => {
-    switch (theme) {
-      case 'cyber':
-        return {
-          background: `linear-gradient(180deg, hsl(280 70% 10%) 0%, hsl(280 60% 5%) 100%)`,
-          playerColor: '#00FFE0',
-          obstacleColor: 'hsl(320 90% 50%)',
-          coinColor: '#FFFF00',
-          pipeGradient: 'linear-gradient(90deg, hsl(320 85% 35%) 0%, hsl(320 90% 50%) 30%, hsl(320 90% 55%) 50%, hsl(320 90% 50%) 70%, hsl(320 85% 35%) 100%)'
-        };
-      case 'retro':
-        return {
-          background: `linear-gradient(180deg, hsl(0 0% 5%) 0%, hsl(0 0% 2%) 100%)`,
-          playerColor: '#00FF00',
-          obstacleColor: '#FF0000',
-          coinColor: '#FFFF00',
-          pipeGradient: 'linear-gradient(90deg, hsl(0 70% 30%) 0%, hsl(0 85% 45%) 30%, hsl(0 85% 50%) 50%, hsl(0 85% 45%) 70%, hsl(0 70% 30%) 100%)'
-        };
-      case 'nature':
-        return {
-          background: `linear-gradient(180deg, hsl(120 50% 10%) 0%, hsl(120 40% 5%) 100%)`,
-          playerColor: '#4AFF4A',
-          obstacleColor: 'hsl(30 80% 50%)',
-          coinColor: '#FFD700',
-          pipeGradient: 'linear-gradient(90deg, hsl(30 85% 35%) 0%, hsl(30 90% 50%) 30%, hsl(30 90% 55%) 50%, hsl(30 90% 50%) 70%, hsl(30 85% 35%) 100%)'
-        };
+  const completeDailyPuzzle = () => {
+    if (!dailyPuzzle) return;
+
+    const today = new Date().toDateString();
+    const newStats = {
+      ...dailyStats,
+      [today]: {
+        moves,
+        time: seconds,
+        completed: true,
+      },
+    };
+
+    setDailyStats(newStats);
+    localStorage.setItem(DAILY_STATS_KEY, JSON.stringify(newStats));
+    setShowDailyComplete(true);
+  };
+
+  const selectPixabayImage = (image: PuzzleItem) => {
+    setSelectedPixabayImage(image);
+  };
+
+  const selectLocalImage = (image: PuzzleItem) => {
+    setSelectedLocalImage(image);
+  };
+
+  const selectMain = (brand: PuzzleItem) => {
+    setSelectedMain(brand);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = [
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+    if (!validTypes.includes(file.type)) {
+      setUploadError("Please upload a valid image file (JPEG, PNG, GIF, WebP)");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("File size too large. Maximum size is 5MB.");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageUrl = e.target?.result as string;
+
+      const newLocalImage: PuzzleItem = {
+        id: Date.now(),
+        name: file.name.split(".")[0] || "My Image",
+        symbol: `LOC${localImages.length + 1}`,
+        imageUrl: imageUrl,
+      };
+
+      const updatedLocalImages = [newLocalImage, ...localImages];
+      setLocalImages(updatedLocalImages);
+      setSelectedLocalImage(newLocalImage);
+
+      setActiveTab("local");
+
+      setIsUploading(false);
+
+      event.target.value = "";
+    };
+
+    reader.onerror = () => {
+      setUploadError("Failed to read image file. Please try again.");
+      setIsUploading(false);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const removeLocalImage = (id: number, event: React.MouseEvent) => {
+    event.stopPropagation();
+    const updatedLocalImages = localImages.filter((img) => img.id !== id);
+    setLocalImages(updatedLocalImages);
+
+    if (selectedLocalImage?.id === id) {
+      setSelectedLocalImage(
+        updatedLocalImages.length > 0 ? updatedLocalImages[0] : null
+      );
+    }
+
+    if (updatedLocalImages.length === 0) {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+    } else {
+      localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify(updatedLocalImages)
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!isPlaying || hasWon) return;
+    const interval = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [isPlaying, hasWon]);
+
+  useEffect(() => {
+    if (!hasWon) return;
+
+    playWinSound();
+    setShowConfetti(true);
+
+    if (
+      dailyPuzzle &&
+      activeTab === "main" &&
+      gridSize === dailyPuzzle.gridSize
+    ) {
+      completeDailyPuzzle();
+    }
+
+    const t = setTimeout(() => setShowConfetti(false), 3500);
+    return () => clearTimeout(t);
+  }, [hasWon, dailyPuzzle, activeTab, gridSize, playWinSound]);
+
+  const handleTileClick = (index: number) => {
+    let selectedItem: PuzzleItem | null;
+
+    switch (activeTab) {
+      case "main":
+        selectedItem = selectedMain;
+        break;
+      case "create":
+        selectedItem = selectedPixabayImage;
+        break;
+      case "local":
+        selectedItem = selectedLocalImage;
+        break;
       default:
-        return {
-          background: `linear-gradient(180deg, hsl(${gradientHue} 60% 8%) 0%, hsl(${gradientHue} 50% 4%) 50%, hsl(${gradientHue} 40% 2%) 100%)`,
-          playerColor: '#00FFFF',
-          obstacleColor: 'hsl(15 90% 50%)',
-          coinColor: '#FFD700',
-          pipeGradient: 'linear-gradient(90deg, hsl(15 85% 35%) 0%, hsl(15 90% 50%) 30%, hsl(15 90% 55%) 50%, hsl(15 90% 50%) 70%, hsl(15 85% 35%) 100%)'
-        };
+        selectedItem = selectedMain;
+    }
+
+    if (!selectedItem || hasWon || tiles[index] === 0) return;
+
+    animateHandToTile(index);
+    playMoveSound();
+
+    const emptyIndex = tiles.indexOf(0);
+    const row = Math.floor(index / gridSize);
+    const col = index % gridSize;
+    const emptyRow = Math.floor(emptyIndex / gridSize);
+    const emptyCol = emptyIndex % gridSize;
+    const isAdjacent =
+      (Math.abs(row - emptyRow) === 1 && col === emptyCol) ||
+      (Math.abs(col - emptyCol) === 1 && row === emptyRow);
+    if (!isAdjacent) return;
+
+    const newTiles = [...tiles];
+    [newTiles[index], newTiles[emptyIndex]] = [
+      newTiles[emptyIndex],
+      newTiles[index],
+    ];
+    setTiles(newTiles);
+    setMoves((m) => m + 1);
+
+    if (isSolved(newTiles)) {
+      playSnapSound();
+      setTimeout(() => {
+        setHasWon(true);
+        setIsPlaying(false);
+      }, 150);
     }
   };
 
-  const themeStyles = getThemeStyles();
-  const difficulty = getDifficulty(score);
+  const formatTime = (s: number): string => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  };
 
-  const brickPattern = `
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 8px,
-      rgba(0,0,0,0.3) 8px,
-      rgba(0,0,0,0.3) 9px
-    )
-  `;
+  const getTilePosition = (tileNum: number): { x: number; y: number } => {
+    const row = Math.floor((tileNum - 1) / gridSize);
+    const col = (tileNum - 1) % gridSize;
+    return { x: col, y: row };
+  };
 
-  // Show loading state during SSR
-  if (!isClient) {
+  useEffect(() => {
+    const updateSize = () => {
+      const width = window.innerWidth;
+      const newPuzzleSize = width < 300 ? 180 : 300;
+      const newTileSize = (newPuzzleSize - (gridSize + 1) * 4) / gridSize;
+      setPuzzleSize(newPuzzleSize);
+      setTileSize(newTileSize);
+    };
+
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, [gridSize]);
+
+  const loadImageAsDataUrl = async (url: string): Promise<string | null> => {
+    try {
+      const response = await fetch(url, { mode: "cors" });
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = img.width;
+            tempCanvas.height = img.height;
+            const tempCtx = tempCanvas.getContext("2d")!;
+            tempCtx.drawImage(img, 0, 0);
+            resolve(tempCanvas.toDataURL("image/png"));
+          } catch {
+            resolve(null);
+          }
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    }
+  };
+
+  const generateVictoryCard = async (): Promise<string> => {
+    let selectedItem: PuzzleItem | null;
+
+    switch (activeTab) {
+      case "main":
+        selectedItem = selectedMain;
+        break;
+      case "create":
+        selectedItem = selectedPixabayImage;
+        break;
+      case "local":
+        selectedItem = selectedLocalImage;
+        break;
+      default:
+        selectedItem = selectedMain;
+    }
+
+    if (!selectedItem) {
+      throw new Error("No item selected");
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 1000;
+    const ctx = canvas.getContext("2d")!;
+
+    ctx.fillStyle = "#03070eff";
+    ctx.fillRect(0, 0, 800, 1000);
+
+    ctx.textAlign = "left";
+    ctx.font = "bold 90px Arial Black, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("PUZZLE", 40, 100);
+    ctx.fillText("COMPLETED", 40, 190);
+
+    const frameX = 40;
+    const frameY = 230;
+    const frameWidth = 720;
+    const frameHeight = 560;
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(frameX, frameY, frameWidth, frameHeight);
+
+    ctx.font = "bold 24px Arial, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.fillText(selectedItem.name.toUpperCase(), 400, 280);
+
+    const imageDataUrl = await loadImageAsDataUrl(selectedItem.imageUrl);
+
+    if (imageDataUrl) {
+      await new Promise<void>((resolve) => {
+        const tokenImg = new Image();
+        tokenImg.onload = () => {
+          const imgSize = 360;
+          const imgX = (800 - imgSize) / 2;
+          const imgY = 310;
+          ctx.drawImage(tokenImg, imgX, imgY, imgSize, imgSize);
+          resolve();
+        };
+        tokenImg.onerror = () => resolve();
+        tokenImg.src = imageDataUrl;
+      });
+    } else {
+      ctx.fillStyle = "#070b13ff";
+      ctx.fillRect(220, 310, 360, 360);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 48px Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(selectedItem.symbol, 400, 510);
+    }
+
+    ctx.font = "italic 22px Georgia, serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
+    ctx.fillText("Foto Game", frameX + 20, frameY + frameHeight - 20);
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, 820);
+    ctx.lineTo(760, 820);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(400, 840);
+    ctx.lineTo(400, 980);
+    ctx.stroke();
+
+    ctx.font = "bold 32px Arial, sans-serif";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
+    ctx.fillText("MOVES", 60, 880);
+
+    ctx.font = "bold 64px Arial, sans-serif";
+    ctx.fillText(moves.toString(), 60, 960);
+
+    ctx.textAlign = "right";
+    ctx.font = "bold 32px Arial, sans-serif";
+    ctx.fillText("TIME", 740, 880);
+
+    ctx.font = "bold 64px Arial, sans-serif";
+    ctx.fillText(formatTime(seconds), 740, 960);
+
+    return canvas.toDataURL("image/png");
+  };
+
+  const downloadVictoryCard = async () => {
+    let selectedItem: PuzzleItem | null;
+
+    switch (activeTab) {
+      case "main":
+        selectedItem = selectedMain;
+        break;
+      case "create":
+        selectedItem = selectedPixabayImage;
+        break;
+      case "local":
+        selectedItem = selectedLocalImage;
+        break;
+      default:
+        selectedItem = selectedMain;
+    }
+
+    if (!selectedItem || isDownloading) return;
+
+    setIsDownloading(true);
+    try {
+      const dataUrl = await generateVictoryCard();
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `FOTO-Victory-${
+        selectedItem.symbol
+      }-${moves}moves-${formatTime(seconds)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Failed to generate victory card:", error);
+      const link = document.createElement("a");
+      link.href = selectedItem.imageUrl;
+      link.download = `FOTO-${selectedItem.symbol}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const shareOnX = () => {
+    let selectedItem: PuzzleItem | null;
+
+    switch (activeTab) {
+      case "main":
+        selectedItem = selectedMain;
+        break;
+      case "create":
+        selectedItem = selectedPixabayImage;
+        break;
+      case "local":
+        selectedItem = selectedLocalImage;
+        break;
+      default:
+        selectedItem = selectedMain;
+    }
+
+    if (!selectedItem) return;
+
+    const shareText = `🎉 I just solved the ${
+      selectedItem.name
+    } puzzle on FOTO! 
+    
+✅ Completed in ${moves} moves
+⏱️ Finished in ${formatTime(seconds)}
+🧩 ${gridSize}×${gridSize} Grid
+    
+Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
+
+    const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+      shareText
+    )}`;
+    window.open(shareUrl, "_blank", "width=550,height=420");
+  };
+
+  const resetGame = () => {
+    setShowImagePicker(true);
+    setHasWon(false);
+    setIsPlaying(false);
+    setMoves(0);
+    setSeconds(0);
+  };
+
+  const today = new Date().toDateString();
+  const dailyCompleted = dailyStats[today]?.completed || false;
+  const dailyPercentile = dailyCompleted
+    ? getDailyPercentile(dailyStats[today].moves, dailyStats[today].time)
+    : 0;
+
+  if (showSplash) {
     return (
-      <div className="relative h-[70vh] max-h-[640px] w-[360px] rounded-2xl overflow-hidden select-none bg-gradient-to-b from-slate-900 to-slate-800 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-pulse text-lg">Loading game...</div>
+      <div
+        className={`h-[70vh] max-h-[640px] w-[360px] ${
+          themeMode === "dark" ? "bg-gray-900" : "bg-white"
+        } flex items-center justify-center`}
+      >
+        <div className="text-center animate-pulse">
+          <div
+            className={`text-6xl font-black ${
+              themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+            } tracking-tight mb-6`}
+          >
+            🧩 FOTO
+          </div>
+          <div
+            className={`${
+              themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+            } text-base tracking-wide`}
+          >
+            Image Puzzle Game
+          </div>
+          <div className="mt-10 flex items-center justify-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full animate-bounce ${
+                themeMode === "dark" ? "bg-blue-400" : "bg-[#007AFF]"
+              }`}
+              style={{ animationDelay: "0s" }}
+            />
+            <div
+              className={`w-2 h-2 rounded-full animate-bounce ${
+                themeMode === "dark" ? "bg-blue-400" : "bg-[#007AFF]"
+              }`}
+              style={{ animationDelay: "0.1s" }}
+            />
+            <div
+              className={`w-2 h-2 rounded-full animate-bounce ${
+                themeMode === "dark" ? "bg-blue-400" : "bg-[#007AFF]"
+              }`}
+              style={{ animationDelay: "0.2s" }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div 
-      ref={gameRef}
-      className="relative h-[70vh] max-h-[640px] w-[360px] rounded-2xl overflow-hidden select-none"
-      style={{ 
-        background: themeStyles.background, 
-        transition: 'background 600ms linear',
-        touchAction: 'none',
-        transform: rumbleEffect ? 'translateX(2px)' : 'none',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        msUserSelect: 'none',
-      }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      <style jsx>{`
-        @keyframes rumble {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-2px); }
-          50% { transform: translateX(2px); }
-          75% { transform: translateX(-2px); }
-        }
-        @keyframes flash {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-5px); }
-        }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-        @keyframes jarFloat {
-          0%, 100% { transform: translateX(-50%) rotate(0deg); }
-          25% { transform: translateX(-50%) rotate(5deg); }
-          75% { transform: translateX(-50%) rotate(-5deg); }
-        }
-      `}</style>
-      
-      {/* Flash effect overlay */}
-      {flashEffect && (
-        <div className="absolute inset-0 bg-white/20 z-30 pointer-events-none" style={{ animation: 'flash 0.2s linear' }} />
-      )}
-      
-      {/* Screen tint for power-ups */}
-      <div 
-        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
-        style={{ backgroundColor: screenTint, opacity: 0.3 }}
-      />
-      
-      {/* Scanlines with parallax */}
-      <div 
-        className="absolute inset-0 pointer-events-none opacity-[0.08]"
-        style={{
-          backgroundImage: `repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 2px,
-            rgba(255,255,255,0.3) 2px,
-            rgba(255,255,255,0.3) 4px
-          )`,
-          transform: `translateY(${starOffset.a}px)`,
-        }}
-      />
-      
-      {/* Dynamic stars with parallax */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(15)].map((_, i) => {
-          const layer = i % 3;
-          const offset = [starOffset.a, starOffset.b, starOffset.c][layer];
-          const size = [0.8, 1.2, 1.6][layer];
-          const opacity = [0.2, 0.4, 0.6][layer];
-          
-          return (
-            <div
-              key={i}
-              className="absolute rounded-full bg-white"
-              style={{
-                left: `${10 + (i * 7.3) % 80}%`,
-                top: `${5 + (i * 6.5) % 90}%`,
-                width: `${size}px`,
-                height: `${size}px`,
-                transform: `translateY(${offset}px)`,
-                opacity: opacity,
-                animation: `pulse ${2 + (i % 4)}s ease-in-out infinite`,
-                animationDelay: `${i * 0.1}s`,
+  if (showImagePicker) {
+    let isLoading = false;
+    let currentItems: PuzzleItem[] = [];
+    let selectedItem: PuzzleItem | null = null;
+    let errorMessage: string | null = null;
+
+    switch (activeTab) {
+      case "main":
+        currentItems = PUZZLE_IMAGES;
+        selectedItem = selectedMain;
+        break;
+      case "create":
+        isLoading = isLoadingPixabay;
+        currentItems = pixabayImages;
+        selectedItem = selectedPixabayImage;
+        errorMessage = pixabayError;
+        break;
+      case "local":
+        currentItems = localImages;
+        selectedItem = selectedLocalImage;
+        break;
+    }
+
+    return (
+      <>
+        <style>
+          {`
+          @keyframes hand-press {
+            0% { transform: scale(1) translateY(0); }
+            50% { transform: scale(0.85) translateY(5px); }
+            100% { transform: scale(1) translateY(0); }
+          }
+          .hand-tap {
+            animation: hand-press 200ms ease-out;
+          }
+         `}
+        </style>
+        <div
+          className={`h-full w-full ${
+            themeMode === "dark" ? "bg-gray-900" : "bg-white"
+          } overflow-y-auto`}
+        >
+          {/* Theme Toggle inside GameSandbox */}
+          <div className="px-5 pt-4 flex justify-between items-center w-full">
+            <h3
+              className={` ${
+                themeMode === "dark" ? "text-white" : "text-gray-900"
+              }`}
+            >
+              FOTO
+            </h3>
+            <button
+              onClick={() => {
+                const newTheme = themeMode === "light" ? "dark" : "light";
+                setThemeMode(newTheme);
+                localStorage.setItem("foto_theme", newTheme);
               }}
-            />
-          );
-        })}
-      </div>
-
-      {/* Smooth transition overlay */}
-      <div 
-        className="absolute inset-0 pointer-events-none transition-all duration-700"
-        style={{ 
-          background: gameState === 'playing' 
-            ? 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.2) 100%)' 
-            : 'rgba(0,0,0,0.7)',
-          opacity: gameState === 'playing' ? 0 : 1
-        }}
-      />
-
-      {/* Danger vignette */}
-      <div 
-        className="absolute inset-0 pointer-events-none transition-opacity duration-300"
-        style={{
-          background: `radial-gradient(ellipse at center, transparent 40%, rgba(220,38,38,${dangerLevel * 0.6}) 100%)`,
-          opacity: dangerLevel,
-        }}
-      />
-
-      {/* Immunity Progress Bar - Bottom Center */}
-      {gameState === 'playing' && isImmune && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30 w-48">
-          <div className="bg-black/40 backdrop-blur-sm rounded-full p-1 border border-emerald-500/30">
-            <div className="flex items-center justify-between px-2">
-              <span className="text-xs text-emerald-300 font-bold">🛡️ IMMUNE</span>
-              <span className="text-xs text-emerald-200 font-mono">
-                {immunityRemaining.toFixed(1)}s
-              </span>
-            </div>
-            <div className="w-full h-2 bg-black/30 rounded-full overflow-hidden mt-1">
-              <div 
-                className="h-2 bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-100"
-                style={{ width: `${(immunityRemaining / 5) * 100}%` }}
+              className={`relative w-12 h-6 rounded-full p-0.5 transition-colors duration-200 focus:outline-none focus:ring-2 ${
+                themeMode === "dark"
+                  ? "bg-gray-700 focus:ring-blue-500"
+                  : "bg-gray-300 focus:ring-blue-400"
+              }`}
+              aria-label={`Switch to ${
+                themeMode === "light" ? "dark" : "light"
+              } mode`}
+            >
+              <div
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ${
+                  themeMode === "dark" ? "translate-x-6" : "translate-x-0"
+                }`}
               />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Immunity visual effect */}
-      {gameState === 'playing' && isImmune && (
-        <div className="absolute inset-0 pointer-events-none z-20">
-          <div 
-            className="absolute inset-0 rounded-2xl"
-            style={{
-              background: `radial-gradient(ellipse at center, transparent 40%, rgba(74, 222, 128, 0.1) 100%)`,
-              animation: 'pulse 1s ease-in-out infinite',
-            }}
-          />
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            <div 
-              className="w-64 h-64 rounded-full"
-              style={{
-                background: `radial-gradient(circle, rgba(74, 222, 128, 0.05) 0%, transparent 70%)`,
-                animation: 'pulse 2s ease-in-out infinite',
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* START SCREEN */}
-      {gameState === 'start' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
-          {/* Game title with glow */}
-          <div className="relative mb-4">
-            <h1 className="text-4xl font-black tracking-tighter text-white text-center mb-2">
-              SCROLL OR DIE
-            </h1>
-            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-lg blur opacity-30 -z-10" />
-            <p className="text-sm text-slate-300 text-center">
-              The ultimate scrolling challenge
-            </p>
-          </div>
-
-          {/* Stats summary */}
-          <div className="flex gap-4 mb-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-400">{highScore.toFixed(1)}s</div>
-              <div className="text-xs text-slate-400">Best Score</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-emerald-400">{streak}🔥</div>
-              <div className="text-xs text-slate-400">Day Streak</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-cyan-400">{totalCoins}</div>
-              <div className="text-xs text-slate-400">Total Coins</div>
-            </div>
-          </div>
-
-          {/* Social buttons */}
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowChallenges(true);
-              }}
-              className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors active:bg-white/15"
-            >
-              🏆 Challenges
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowThemeSelector(!showThemeSelector);
-              }}
-              className="px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors active:bg-white/15"
-            >
-              🎨 Theme
+              <span className="absolute left-1 top-1 text-[10px]">
+                {themeMode === "dark" ? "🌙" : "🌞"}
+              </span>
             </button>
           </div>
 
-          {/* Theme selector */}
-          {showThemeSelector && (
-            <div className="mb-4 p-3 bg-white/5 rounded-xl backdrop-blur-sm">
-              <div className="text-sm text-slate-300 mb-2">Select Theme:</div>
-              <div className="flex gap-2">
-                {(['default', 'cyber', 'retro', 'nature'] as const).map(t => (
-                  <button
-                    key={t}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTheme(t);
-                    }}
-                    className={`px-3 py-2 rounded-lg text-xs capitalize ${theme === t ? 'bg-white text-black' : 'bg-white/5'} active:scale-95 transition-transform`}
+          {/* Daily Puzzle Card */}
+          {dailyPuzzle && (
+            <div className={`px-5 pt-2 ${showDailyComplete ? "pb-4" : "pb-6"}`}>
+              <div
+                className={`relative rounded-[20px] p-5 ${
+                  themeMode === "dark"
+                    ? "bg-gradient-to-r from-blue-900/30 to-purple-900/30 border border-blue-500/20"
+                    : "bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200"
+                }`}
+              >
+                <div className="absolute top-3 right-3">
+                  <span
+                    className={`text-xs font-bold px-2 py-1 rounded-full ${
+                      themeMode === "dark"
+                        ? "bg-orange-500/20 text-orange-300"
+                        : "bg-orange-100 text-orange-600"
+                    }`}
                   >
-                    {t}
-                  </button>
+                    🔥 TODAY'S PUZZLE
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 mt-2">
+                  <div className="w-16 h-16 rounded-[14px] overflow-hidden">
+                    <img
+                      src={PUZZLE_IMAGES[dailyPuzzle.imageIndex].imageUrl}
+                      alt="Daily Puzzle"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3
+                      className={`font-bold text-lg ${
+                        themeMode === "dark" ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      {PUZZLE_IMAGES[dailyPuzzle.imageIndex].name}
+                    </h3>
+                    <p
+                      className={`text-sm ${
+                        themeMode === "dark" ? "text-gray-300" : "text-gray-600"
+                      } mb-2`}
+                    >
+                      {dailyPuzzle.gridSize}×{dailyPuzzle.gridSize} Grid •{" "}
+                      {today}
+                    </p>
+
+                    {showDailyComplete ? (
+                      <div
+                        className={`rounded-[12px] p-3 ${
+                          themeMode === "dark"
+                            ? "bg-gray-800/50"
+                            : "bg-white/80"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center mb-2">
+                          <span
+                            className={`text-sm ${
+                              themeMode === "dark"
+                                ? "text-gray-300"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            Your score
+                          </span>
+                          <span
+                            className={`text-lg font-bold ${
+                              themeMode === "dark"
+                                ? "text-white"
+                                : "text-gray-900"
+                            }`}
+                          >
+                            {dailyStats[today].moves} moves •{" "}
+                            {formatTime(dailyStats[today].time)}
+                          </span>
+                        </div>
+                        <div
+                          className={`text-center py-2 rounded-[10px] ${
+                            themeMode === "dark"
+                              ? "bg-gray-900/50"
+                              : "bg-gray-100"
+                          }`}
+                        >
+                          <span
+                            className={`text-sm font-medium ${
+                              themeMode === "dark"
+                                ? "text-blue-300"
+                                : "text-blue-600"
+                            }`}
+                          >
+                            🏆 You beat {dailyPercentile}% of players today
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => startGame(dailyPuzzle.gridSize, true)}
+                          className="w-full mt-3 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium rounded-[12px] hover:opacity-90 transition-all"
+                        >
+                          🔄 Play Again
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startGame(dailyPuzzle.gridSize, true)}
+                        className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-[14px] hover:opacity-90 transition-all shadow-lg"
+                      >
+                        🚀 PLAY CHALLENGE
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Content */}
+          <div className={`px-5 ${showDailyComplete ? "pt-0" : "pt-5"} pb-24`}>
+            {/* Recently Added Section */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-5">
+                <h2
+                  className={`text-xl font-bold ${
+                    themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                  }`}
+                >
+                  Recently Added
+                </h2>
+                <button
+                  className={`text-sm font-medium ${
+                    themeMode === "dark" ? "text-blue-400" : "text-[#007AFF]"
+                  }`}
+                >
+                  View more
+                </button>
+              </div>
+              <div className="flex space-x-4 overflow-x-auto pb-3 -mx-5 px-5">
+                {currentItems.slice(0, 4).map((item) => (
+                  <div
+                    key={`recent-${item.id}`}
+                    className={`flex-shrink-0 w-32 h-32 rounded-[20px] overflow-hidden shadow-sm ${
+                      themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
+                    }`}
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Start button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setGameState('playing');
-              gameStartTime.current = Date.now();
-              lastObstacleTime.current = Date.now();
-              if (!audioStarted && audioRef.current) {
-                audioRef.current.play().then(() => {
-                  setAudioStarted(true);
-                }).catch(() => {});
-              }
-            }}
-            className="relative px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold rounded-2xl text-lg shadow-2xl hover:scale-105 transition-transform active:scale-95 mb-4"
-          >
-            <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl blur opacity-50 -z-10" />
-            🎮 START GAME
-          </button>
+            {/* Popular Section */}
+            <div className="mb-8">
+              <h2
+                className={`text-xl font-bold mb-5 ${
+                  themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                }`}
+              >
+                Popular
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                {currentItems.slice(0, 4).map((item) => (
+                  <div
+                    key={`popular-${item.id}`}
+                    className={`aspect-square rounded-[20px] overflow-hidden shadow-sm ${
+                      themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
+                    }`}
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
 
-          {/* Start hint */}
-          <div className="text-orange-300 animate-bounce text-sm mb-2">
-            ↕ Scroll or drag to start!
-          </div>
+            {/* Puzzle Difficulty Section */}
+            <div className="mb-8">
+              <h2
+                className={`text-xl font-bold mb-2 ${
+                  themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                }`}
+              >
+                Pick your difficulty
+              </h2>
+              <p
+                className={`text-sm mb-6 ${
+                  themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                }`}
+              >
+                Select the number of pieces for your puzzle
+              </p>
 
-          {/* Difficulty selector */}
-          <div className="mb-6">
-            <div className="text-xs text-slate-400 mb-2">Difficulty:</div>
-            <div className="flex items-center gap-2">
-              {(['Easy','Medium','Hard'] as const).map(d => (
+              <div className="flex space-x-3">
                 <button
-                  key={d}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDifficultyMode(d);
-                  }}
-                  className={`px-4 py-2 rounded-xl font-semibold transition-all ${difficultyMode===d 
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg scale-105' 
-                    : 'bg-white/5 text-slate-300 hover:bg-white/10'} active:scale-95`}
+                  onClick={() => setGridSize(3)}
+                  className={`flex-1 py-4 rounded-[14px] font-medium text-center transition-all ${
+                    gridSize === 3
+                      ? themeMode === "dark"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-[#0A0A0A] text-white shadow-sm"
+                      : themeMode === "dark"
+                      ? "bg-gray-800 text-gray-300"
+                      : "bg-[#F5F5F7] text-[#666666]"
+                  }`}
                 >
-                  {d}
+                  <div className="text-lg">3x3</div>
+                  <div className="text-xs mt-1">PIECES</div>
                 </button>
-              ))}
+                <button
+                  onClick={() => setGridSize(4)}
+                  className={`flex-1 py-4 rounded-[14px] font-medium text-center transition-all ${
+                    gridSize === 4
+                      ? themeMode === "dark"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-[#0A0A0A] text-white shadow-sm"
+                      : themeMode === "dark"
+                      ? "bg-gray-800 text-gray-300"
+                      : "bg-[#F5F5F7] text-[#666666]"
+                  }`}
+                >
+                  <div className="text-lg">4x4</div>
+                  <div className="text-xs mt-1">PIECES</div>
+                </button>
+                <button
+                  onClick={() => setGridSize(5)}
+                  className={`flex-1 py-4 rounded-[14px] font-medium text-center transition-all ${
+                    gridSize === 5
+                      ? themeMode === "dark"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-[#0A0A0A] text-white shadow-sm"
+                      : themeMode === "dark"
+                      ? "bg-gray-800 text-gray-300"
+                      : "bg-[#F5F5F7] text-[#666666]"
+                  }`}
+                >
+                  <div className="text-lg">5x5</div>
+                  <div className="text-xs mt-1">PIECES</div>
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Quick stats */}
-          <div className="text-xs text-slate-400 space-y-1">
-            <div className="flex items-center gap-2">
-              <span>⚡ {unlockedAchievements.length}/7 Achievements</span>
-              <span>•</span>
-              <span>💰 {coinScore} coins this round</span>
-            </div>
-            {todayChallenge && (
-              <div className="bg-white/5 p-2 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <span className="text-emerald-300">Daily Challenge:</span>
-                  <span className="font-semibold">{todayChallenge.progress}/{todayChallenge.target}</span>
+            {/* Create Section */}
+            {activeTab === "create" && (
+              <div className="mb-8">
+                <div
+                  className={`rounded-[24px] p-6 ${
+                    themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
+                  }`}
+                >
+                  <h3
+                    className={`text-xl font-bold mb-2 ${
+                      themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                    }`}
+                  >
+                    Bring your ideas to life.
+                  </h3>
+                  <p
+                    className={`text-sm mb-6 ${
+                      themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                    }`}
+                  >
+                    Create new puzzles using our AI.
+                  </p>
+
+                  <div className="flex mb-4">
+                    <input
+                      type="text"
+                      value={pixabaySearchQuery}
+                      onChange={(e) => setPixabaySearchQuery(e.target.value)}
+                      placeholder="Search for images..."
+                      className={`flex-1 px-4 py-3 rounded-l-[12px] focus:outline-none text-sm ${
+                        themeMode === "dark"
+                          ? "bg-gray-900 border border-gray-700 text-white focus:border-blue-500"
+                          : "bg-white border border-[#EAEAEA] text-[#0A0A0A] focus:border-[#007AFF]"
+                      }`}
+                    />
+                    <button
+                      onClick={() => fetchPixabayImages(pixabaySearchQuery)}
+                      className="px-5 bg-[#007AFF] text-white font-medium rounded-r-[12px] text-sm hover:bg-[#0056CC]"
+                    >
+                      Search
+                    </button>
+                  </div>
                 </div>
-                <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-1">
-                  <div 
-                    className="h-1 bg-gradient-to-r from-emerald-400 to-cyan-400"
-                    style={{ width: `${Math.min(100, (todayChallenge.progress / todayChallenge.target) * 100)}%` }}
-                  />
-                </div>
+
+                <h4
+                  className={`text-lg font-semibold mt-8 mb-4 ${
+                    themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                  }`}
+                >
+                  Created by the community
+                </h4>
               </div>
             )}
-          </div>
 
-          {/* Instructions button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowInstructions(true);
-            }}
-            className="mt-4 px-4 py-2 bg-white/5 rounded-lg text-slate-300 hover:bg-white/10 transition-colors active:bg-white/15"
-          >
-            ℹ️ How to Play
-          </button>
-        </div>
-      )}
+            {/* Upload Section for Local tab */}
+            {activeTab === "local" && (
+              <div className="mb-8">
+                <div
+                  className={`rounded-[24px] p-6 ${
+                    themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
+                  }`}
+                >
+                  <h3
+                    className={`text-xl font-bold mb-2 ${
+                      themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                    }`}
+                  >
+                    Upload Your Image
+                  </h3>
+                  <p
+                    className={`text-sm mb-6 ${
+                      themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                    }`}
+                  >
+                    Create puzzles from your own photos!
+                  </p>
 
-      {/* CHALLENGES MODAL */}
-      {showChallenges && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowChallenges(false)} />
-          <div className="relative w-[90%] max-w-md rounded-2xl bg-gradient-to-b from-slate-900/95 to-slate-800/95 ring-1 ring-white/5 shadow-2xl p-5 z-50">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white">🏆 Active Challenges</h3>
-              <button 
-                onClick={() => setShowChallenges(false)} 
-                className="p-2 hover:bg-white/10 rounded-lg active:bg-white/15"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="space-y-3">
-              {activeChallenges.map(challenge => (
-                <div key={challenge.id} className="p-3 bg-white/5 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium">{challenge.title}</span>
-                    <span className="text-sm text-emerald-300">+{challenge.reward} coins</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div 
-                        className="h-2 bg-gradient-to-r from-cyan-500 to-blue-500"
-                        style={{ width: `${(challenge.progress / challenge.target) * 100}%` }}
-                      />
+                  <label className="block w-full">
+                    <div
+                      className={`w-full py-8 border-2 border-dashed rounded-[20px] flex flex-col items-center justify-center cursor-pointer transition-all ${
+                        themeMode === "dark"
+                          ? "bg-gray-900 border-gray-700 hover:border-blue-500"
+                          : "bg-white border-[#EAEAEA] hover:border-[#007AFF]"
+                      }`}
+                    >
+                      {isUploading ? (
+                        <>
+                          <div className="w-8 h-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin mb-3" />
+                          <p
+                            className={`text-sm ${
+                              themeMode === "dark"
+                                ? "text-gray-400"
+                                : "text-[#666666]"
+                            }`}
+                          >
+                            Uploading...
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-3xl mb-3">📁</div>
+                          <p
+                            className={`font-medium ${
+                              themeMode === "dark"
+                                ? "text-white"
+                                : "text-[#0A0A0A]"
+                            }`}
+                          >
+                            Choose an image
+                          </p>
+                          <p
+                            className={`text-xs mt-1 ${
+                              themeMode === "dark"
+                                ? "text-gray-500"
+                                : "text-[#666666]"
+                            }`}
+                          >
+                            JPEG, PNG, GIF, WebP (max 5MB)
+                          </p>
+                        </>
+                      )}
                     </div>
-                    <span className="text-xs text-slate-300">{challenge.progress}/{challenge.target}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={isUploading}
+                    />
+                  </label>
+
+                  {uploadError && (
+                    <div
+                      className={`mt-4 rounded-[12px] p-4 ${
+                        themeMode === "dark"
+                          ? "bg-red-900/30 border border-red-800"
+                          : "bg-red-50 border border-red-200"
+                      }`}
+                    >
+                      <p className="text-red-600 text-sm text-center">
+                        {uploadError}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <h4
+                  className={`text-lg font-semibold mt-8 mb-4 ${
+                    themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                  }`}
+                >
+                  My Uploads
+                </h4>
+              </div>
+            )}
+
+            {/* Image Selection Grid */}
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="w-8 h-8 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin" />
+                <p
+                  className={`mt-4 text-sm ${
+                    themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                  }`}
+                >
+                  Loading images...
+                </p>
+              </div>
+            ) : activeTab === "local" && localImages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="text-4xl mb-4 text-gray-400">📁</div>
+                <p
+                  className={`mb-2 text-center ${
+                    themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                  }`}
+                >
+                  No uploaded images yet
+                </p>
+                <p
+                  className={`text-sm text-center ${
+                    themeMode === "dark" ? "text-gray-600" : "text-[#999999]"
+                  }`}
+                >
+                  Upload an image above to create your first custom puzzle!
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {currentItems.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      if (activeTab === "main") selectMain(item);
+                      else if (activeTab === "create") selectPixabayImage(item);
+                      else selectLocalImage(item);
+                    }}
+                    className={`relative aspect-square rounded-[20px] overflow-hidden shadow-sm transition-all duration-200 ${
+                      selectedItem?.id === item.id
+                        ? "ring-2 ring-[#007AFF]"
+                        : themeMode === "dark"
+                        ? "bg-gray-800"
+                        : "bg-[#F5F5F7]"
+                    }`}
+                  >
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {selectedItem?.id === item.id && (
+                      <div className="absolute top-3 right-3 bg-[#007AFF] text-white text-xs font-medium px-2 py-1 rounded-full">
+                        ✓
+                      </div>
+                    )}
+                    {activeTab === "local" && (
+                      <button
+                        onClick={(e) => removeLocalImage(item.id, e)}
+                        className={`absolute top-3 left-3 text-xs font-medium w-6 h-6 rounded-full flex items-center justify-center shadow-sm transition-all ${
+                          themeMode === "dark"
+                            ? "bg-gray-700/90 text-white hover:bg-gray-600"
+                            : "bg-white/90 text-[#0A0A0A] hover:bg-white"
+                        }`}
+                      >
+                        ×
+                      </button>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent p-3">
+                      <p className="font-medium text-white text-sm truncate">
+                        {item.name}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-400 mt-1">
-                    {challenge.type === 'daily' ? '🕒 Resets daily' : 
-                     challenge.type === 'weekly' ? '📅 Weekly challenge' : '⭐ Special event'}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+                ))}
+              </div>
+            )}
 
-      {/* INSTRUCTIONS MODAL */}
-      {showInstructions && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowInstructions(false)} />
-          <div className="relative w-[94%] max-w-xl rounded-2xl bg-gradient-to-b from-slate-900/95 to-slate-800/95 ring-1 ring-white/5 shadow-2xl p-5 z-50">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-2xl font-extrabold text-white">🎮 How to Master Scroll or Die</h3>
-              </div>
-              <button 
-                onClick={() => setShowInstructions(false)} 
-                className="p-3 hover:bg-white/10 rounded-xl active:bg-white/15"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex gap-4 mb-6">
-              <div className="flex-1 bg-white/5 p-4 rounded-xl">
-                <div className="text-lg mb-2">⚡ Power-Ups</div>
-                <div className="text-sm text-slate-300 space-y-1">
-                  <div>🛡️ Shield - Invincibility</div>
-                  <div>⏱️ Slowmo - Slow time</div>
-                  <div>2️⃣ Double - 2x score</div>
-                  <div>🧲 Magnet - Attract coins</div>
-                </div>
-              </div>
-              <div className="flex-1 bg-white/5 p-4 rounded-xl">
-                <div className="text-lg mb-2">🫙 Immunity Jars</div>
-                <div className="text-sm text-slate-300 space-y-1">
-                  <div>💚 Green Jars - 5s immunity</div>
-                  <div>🛡️ Avoid all obstacles</div>
-                  <div>⏱️ Progress bar shows time left</div>
-                  <div>✨ Collect when in danger!</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-sm text-slate-200 space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="bg-cyan-500/20 p-2 rounded-lg">🎯</div>
-                <div>
-                  <strong>Pro Tip:</strong> Collect jars when you see tricky obstacle patterns approaching.
-                  The 5-second immunity can save your run!
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-purple-500/20 p-2 rounded-lg">🔥</div>
-                <div>
-                  <strong>Combo System:</strong> Collect coins rapidly to build combo chains.
-                  Every 5 coins increases your multiplier up to 3x!
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="bg-emerald-500/20 p-2 rounded-lg">📱</div>
-                <div>
-                  <strong>Share Your Score:</strong> Compete with friends and share your best runs on X
-                  with #{hashtagChallenge.replace('#', '')} for a chance to be featured!
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
+            {/* Start Game Floating Button */}
+            <div className="flex justify-center mt-10 mb-10">
               <button
-                onClick={startFromModal}
-                className="px-5 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold hover:scale-105 transition-transform active:scale-95"
+                onClick={() => startGame()}
+                disabled={
+                  !selectedItem ||
+                  (activeTab === "create" && isLoadingPixabay) ||
+                  (activeTab === "local" && localImages.length === 0)
+                }
+                className="px-6 py-3 bg-[#007AFF] text-white font-medium rounded-full shadow-lg hover:bg-[#0056CC] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Start Game!
-              </button>
-              <button
-                onClick={() => setShowInstructions(false)}
-                className="px-5 py-3 rounded-xl bg-white/6 text-white hover:bg-white/8 transition-colors active:bg-white/10"
-              >
-                Got it!
+                Start Game
               </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* GAMEPLAY */}
-      {gameState === 'playing' && (
-        <>
-          {/* Top HUD */}
-          <div className="absolute top-3 left-3 right-3 flex justify-between items-start z-20">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-black text-white tabular-nums drop-shadow-lg">
-                  {(score * scoreMultiplier).toFixed(1)}s
-                </span>
-                {scoreMultiplier > 1 && (
-                  <span className="text-xs bg-gradient-to-r from-amber-500 to-orange-500 text-black px-2 py-1 rounded-full font-bold animate-pulse">
-                    {scoreMultiplier.toFixed(1)}x
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-slate-400 uppercase tracking-wider bg-black/30 px-2 py-1 rounded">
-                  {difficulty.label}
-                </span>
-                {comboEffect && (
-                  <span className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded-full">
-                    {comboEffect.type} {comboEffect.level}⚡
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex flex-col items-end">
-              <div className="text-right">
-                <div className="text-[10px] text-slate-400">🏆 Best</div>
-                <div className="text-sm font-bold text-orange-300 tabular-nums">{highScore.toFixed(1)}s</div>
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="text-xs text-amber-300">💰{coinScore}</div>
-                <div className="text-xs text-cyan-300">🔥{streak}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Power-up indicators */}
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex gap-1 z-20">
-            {hasShield && <div className="px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs">🛡️ {Math.ceil(shieldTimer/60)}s</div>}
-            {hasSlowmo && <div className="px-2 py-1 bg-cyan-500/20 text-cyan-300 rounded text-xs">⏱️ {Math.ceil(slowmoTimer/60)}s</div>}
-            {hasMagnet && <div className="px-2 py-1 bg-pink-500/20 text-pink-300 rounded text-xs">🧲 {Math.ceil(magnetTimer/60)}s</div>}
-          </div>
-
-          {/* Double multiplier popup */}
-          {showDoublePopup && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-20 z-40 pointer-events-none">
-              <div className="bg-gradient-to-r from-amber-400 to-orange-500 text-black font-black px-6 py-3 rounded-2xl shadow-2xl animate-bounce text-lg">
-                2x SCORE MULTIPLIER!
-              </div>
-            </div>
-          )}
-
-          {/* Combo text */}
-          {showComboText && (
-            <div className="absolute left-1/2 -translate-x-1/2 top-32 z-40 pointer-events-none">
-              <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 animate-float">
-                COMBO x{comboMultiplier.toFixed(1)}!
-              </div>
-            </div>
-          )}
-
-          {/* Controls */}
-          <div className="absolute bottom-3 right-3 flex flex-col gap-2 z-20">
-            <button
-              onClick={toggleMute}
-              className="p-3 bg-white/10 backdrop-blur-sm rounded-xl hover:bg-white/20 transition-colors active:bg-white/25"
-              title={muted ? 'Unmute' : 'Mute'}
-            >
-              {muted ? '🔇' : '🔊'}
-            </button>
-          </div>
-
-          {/* Player */}
+          {/* Bottom Tab Navigation */}
           <div
-            className="absolute w-4 h-4 rounded-full z-30 transition-transform duration-75 ease-out"
-            style={{
-              left: '15%',
-              top: `${playerY}%`,
-              transform: 'translate(-50%, -50%)',
-              background: themeStyles.playerColor,
-              boxShadow: `
-                0 0 20px ${themeStyles.playerColor},
-                0 0 40px ${themeStyles.playerColor}80,
-                0 0 60px ${themeStyles.playerColor}40
-              `,
-              filter: `blur(${dangerLevel * 2}px)`,
-              border: isImmune ? '2px solid #4ade80' : 'none',
-            }}
-          />
-
-          {/* Trail particles */}
-          {trailParticles.map(p => (
-            <div
-              key={p.id}
-              className="absolute rounded-full"
-              style={{
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                width: `${p.size}px`,
-                height: `${p.size}px`,
-                background: p.color,
-                opacity: p.life,
-                boxShadow: `0 0 6px ${p.color}`,
-              }}
-            />
-          ))}
-
-          {/* Obstacles */}
-          {obstacles.map(obs => {
-            const { id, x, type, gapY, gapHeight, topHeight, bottomY } = obs;
-            
-            if (type === 'bar' || type === 'gap') {
-              const gapTop = (gapY || 50) - (gapHeight || GAP_SIZE) / 2;
-              const gapBottom = (gapY || 50) + (gapHeight || GAP_SIZE) / 2;
-
-              return (
-                <React.Fragment key={id}>
-                  {/* Top pipe */}
-                  <div
-                    className="absolute w-5 rounded-b-lg"
-                    style={{
-                      left: `${x}%`,
-                      transform: 'translateX(-50%)',
-                      top: 0,
-                      height: `${gapTop}%`,
-                      background: themeStyles.pipeGradient,
-                      boxShadow: `inset 2px 0 4px rgba(255,150,100,0.5), inset -2px 0 4px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.5), 0 0 15px rgba(255,100,50,0.3)`,
-                    }}
-                  >
-                    <div 
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-7 h-3 rounded-b-md"
-                      style={{
-                        background: themeStyles.pipeGradient,
-                        boxShadow: `0 2px 4px rgba(0,0,0,0.5)`,
-                      }}
-                    />
-                    <div className="absolute inset-0 rounded-b-lg opacity-40" style={{ backgroundImage: brickPattern }} />
-                  </div>
-                  
-                  {/* Bottom pipe */}
-                  <div
-                    className="absolute w-5 rounded-t-lg"
-                    style={{
-                      left: `${x}%`,
-                      transform: 'translateX(-50%)',
-                      top: `${gapBottom}%`,
-                      height: `${100 - gapBottom}%`,
-                      background: themeStyles.pipeGradient,
-                      boxShadow: `inset 2px 0 4px rgba(255,150,100,0.5), inset -2px 0 4px rgba(0,0,0,0.4), 0 -4px 8px rgba(0,0,0,0.5), 0 0 15px rgba(255,100,50,0.3)`,
-                    }}
-                  >
-                    <div 
-                      className="absolute -top-1 left-1/2 -translate-x-1/2 w-7 h-3 rounded-t-md"
-                      style={{
-                        background: themeStyles.pipeGradient,
-                        boxShadow: `0 -2px 4px rgba(0,0,0,0.5)`,
-                      }}
-                    />
-                    <div className="absolute inset-0 rounded-t-lg opacity-40" style={{ backgroundImage: brickPattern }} />
-                  </div>
-                </React.Fragment>
-              );
-            }
-
-            // Double trap
-            return (
-              <React.Fragment key={id}>
-                <div
-                  className="absolute w-5 rounded-b-lg"
-                  style={{
-                    left: `${x}%`,
-                    transform: 'translateX(-50%)',
-                    top: 0,
-                    height: `${topHeight || 20}%`,
-                    background: `linear-gradient(90deg, hsl(0 70% 35%) 0%, hsl(0 80% 50%) 30%, hsl(0 80% 55%) 50%, hsl(0 80% 50%) 70%, hsl(0 70% 35%) 100%)`,
-                    boxShadow: `inset 2px 0 4px rgba(255,100,100,0.5), inset -2px 0 4px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.5), 0 0 15px rgba(255,50,50,0.4)`,
-                  }}
-                >
-                  <div 
-                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-7 h-3 rounded-b-md"
-                    style={{ background: `linear-gradient(90deg, hsl(0 70% 30%) 0%, hsl(0 75% 45%) 50%, hsl(0 70% 30%) 100%)` }}
-                  />
-                  <div className="absolute inset-0 rounded-b-lg opacity-40" style={{ backgroundImage: brickPattern }} />
-                </div>
-                <div
-                  className="absolute w-5 rounded-t-lg"
-                  style={{
-                    left: `${x}%`,
-                    transform: 'translateX(-50%)',
-                    top: `${bottomY || 80}%`,
-                    height: `${100 - (bottomY || 80)}%`,
-                    background: `linear-gradient(90deg, hsl(0 70% 35%) 0%, hsl(0 80% 50%) 30%, hsl(0 80% 55%) 50%, hsl(0 80% 50%) 70%, hsl(0 70% 35%) 100%)`,
-                    boxShadow: `inset 2px 0 4px rgba(255,100,100,0.5), inset -2px 0 4px rgba(0,0,0,0.4), 0 -4px 8px rgba(0,0,0,0.5), 0 0 15px rgba(255,50,50,0.4)`,
-                  }}
-                >
-                  <div 
-                    className="absolute -top-1 left-1/2 -translate-x-1/2 w-7 h-3 rounded-t-md"
-                    style={{ background: `linear-gradient(90deg, hsl(0 70% 30%) 0%, hsl(0 75% 45%) 50%, hsl(0 70% 30%) 100%)` }}
-                  />
-                  <div className="absolute inset-0 rounded-t-lg opacity-40" style={{ backgroundImage: brickPattern }} />
-                </div>
-              </React.Fragment>
-            );
-          })}
-
-          {/* Meteors */}
-          {meteors.map(m => (
-            <div
-              key={m.id}
-              className="absolute rounded-full"
-              style={{
-                left: `${m.x}%`,
-                top: `${m.y}%`,
-                width: `${m.size}%`,
-                height: `${m.size}%`,
-                transform: `translate(-50%,-50%) rotate(${m.rot}deg)`,
-                background: 'radial-gradient(circle at 35% 30%, #e6e0d6 0%, #b89a73 30%, #7a5b44 60%, #4b3b2f 100%)',
-                boxShadow: '0 8px 20px rgba(0,0,0,0.6), inset -6px -4px 10px rgba(255,255,255,0.05)',
-                border: '1px solid rgba(0,0,0,0.4)'
-              }}
-            />
-          ))}
-
-          {/* Coins */}
-          {coins.map(coin => !coin.collected && (
-            <div
-              key={coin.id}
-              className="absolute rounded-full animate-float"
-              style={{
-                left: `${coin.x}%`,
-                top: `${coin.y}%`,
-                width: '18px',
-                height: '18px',
-                transform: 'translate(-50%, -50%)',
-                background: `radial-gradient(circle at 30% 30%, ${themeStyles.coinColor}, ${themeStyles.coinColor}80)`,
-                boxShadow: `0 0 15px ${themeStyles.coinColor}, 0 0 30px ${themeStyles.coinColor}60`,
-                border: `2px solid ${themeStyles.coinColor}CC`,
-                animationDelay: `${coin.id % 2}s`,
-              }}
-            />
-          ))}
-
-          {/* Power-ups */}
-          {powerUps.map(pu => !pu.collected && (
-            <div
-              key={pu.id}
-              className="absolute flex items-center justify-center rounded-lg animate-bounce"
-              style={{
-                left: `${pu.x}%`,
-                top: `${pu.y}%`,
-                width: '28px',
-                height: '28px',
-                transform: 'translate(-50%, -50%)',
-                background: `radial-gradient(circle, ${getPowerUpColor(pu.type)}40, ${getPowerUpColor(pu.type)}20)`,
-                boxShadow: `0 0 15px ${getPowerUpColor(pu.type)}, 0 0 30px ${getPowerUpColor(pu.type)}60`,
-                border: `2px solid ${getPowerUpColor(pu.type)}`,
-              }}
-            >
-              <span className="text-sm">{getPowerUpIcon(pu.type)}</span>
-            </div>
-          ))}
-
-          {/* Jars - Green Immunity Jars */}
-          {jars.map(j => (
-            <div
-              key={j.id}
-              className="absolute z-20"
-              style={{
-                left: `${j.x}%`,
-                transform: 'translateX(-50%)',
-                top: `${j.y}%`,
-                animation: `jarFloat 3s ease-in-out infinite`,
-                animationDelay: `${j.id % 3 * 0.5}s`,
-              }}
-            >
-              {/* Jar body */}
-              <div 
-                className="relative w-6 h-8"
-                style={{
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 30%, #047857 70%, #065f46 100%)',
-                  borderRadius: '3px 3px 8px 8px',
-                  boxShadow: `
-                    inset 0 -4px 6px rgba(0,0,0,0.3),
-                    inset 0 4px 6px rgba(255,255,255,0.2),
-                    0 0 15px rgba(74, 222, 128, 0.7),
-                    0 0 30px rgba(74, 222, 128, 0.4)
-                  `,
-                  border: '2px solid #065f46',
-                }}
+            className={`absolute bottom-0 w-full right-0 border-t px-5 py-3 ${
+              themeMode === "dark"
+                ? "bg-gray-900 border-gray-800"
+                : "bg-white border-[#EAEAEA]"
+            }`}
+          >
+            <div className="flex justify-around">
+              <button
+                onClick={() => setActiveTab("main")}
+                className={`flex flex-col items-center px-4 py-2 rounded-full transition-all ${
+                  activeTab === "main"
+                    ? themeMode === "dark"
+                      ? "bg-gray-800"
+                      : "bg-[#0A0A0A]"
+                    : ""
+                }`}
               >
-                {/* Jar neck */}
-                <div 
-                  className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-4 h-2"
+                <div
+                  className={`text-md ${
+                    activeTab === "main"
+                      ? "text-white"
+                      : themeMode === "dark"
+                      ? "text-gray-400"
+                      : "text-[#666666]"
+                  }`}
+                >
+                  🏠
+                </div>
+                <span
+                  className={`text-[10px] mt-1 ${
+                    activeTab === "main"
+                      ? "text-white font-medium"
+                      : themeMode === "dark"
+                      ? "text-gray-400"
+                      : "text-[#666666]"
+                  }`}
+                >
+                  Main
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("create")}
+                className={`flex flex-col items-center px-4 py-2 rounded-full transition-all ${
+                  activeTab === "create"
+                    ? themeMode === "dark"
+                      ? "bg-gray-800"
+                      : "bg-[#0A0A0A]"
+                    : ""
+                }`}
+              >
+                <div
+                  className={`text-md ${
+                    activeTab === "create"
+                      ? "text-white"
+                      : themeMode === "dark"
+                      ? "text-gray-400"
+                      : "text-[#666666]"
+                  }`}
+                >
+                  ✨
+                </div>
+                <span
+                  className={`text-[10px] mt-1 ${
+                    activeTab === "create"
+                      ? "text-white font-medium"
+                      : themeMode === "dark"
+                      ? "text-gray-400"
+                      : "text-[#666666]"
+                  }`}
+                >
+                  Create
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("local")}
+                className={`flex flex-col items-center px-4 py-2 rounded-full transition-all ${
+                  activeTab === "local"
+                    ? themeMode === "dark"
+                      ? "bg-gray-800"
+                      : "bg-[#0A0A0A]"
+                    : ""
+                }`}
+              >
+                <div
+                  className={`text-md ${
+                    activeTab === "local"
+                      ? "text-white"
+                      : themeMode === "dark"
+                      ? "text-gray-400"
+                      : "text-[#666666]"
+                  }`}
+                >
+                  📁
+                </div>
+                <span
+                  className={`text-[10px] mt-1 ${
+                    activeTab === "local"
+                      ? "text-white font-medium"
+                      : themeMode === "dark"
+                      ? "text-gray-400"
+                      : "text-[#666666]"
+                  }`}
+                >
+                  Local
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Game Screen
+  let selectedItem: PuzzleItem | null;
+
+  switch (activeTab) {
+    case "main":
+      selectedItem = selectedMain;
+      break;
+    case "create":
+      selectedItem = selectedPixabayImage;
+      break;
+    case "local":
+      selectedItem = selectedLocalImage;
+      break;
+    default:
+      selectedItem = selectedMain;
+  }
+
+  return (
+    <div
+      className={`h-full w-full overflow-auto ${
+        themeMode === "dark" ? "bg-gray-900" : "bg-white"
+      }`}
+    >
+      {/* Sound Toggle */}
+      <button
+        onClick={() => setSoundEnabled(!soundEnabled)}
+        className={`absolute top-4 right-4 z-10 p-2 rounded-full ${
+          themeMode === "dark"
+            ? "bg-gray-800 hover:bg-gray-700"
+            : "bg-gray-100 hover:bg-gray-200"
+        } transition-all`}
+        aria-label={soundEnabled ? "Mute sounds" : "Enable sounds"}
+      >
+        {soundEnabled ? "🔊" : "🔇"}
+      </button>
+
+      <div className="px-5 pt-5">
+        {/* Game Header */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={resetGame}
+            className="text-[#007AFF] text-sm font-medium"
+          >
+            ← Back
+          </button>
+
+          <div className="flex gap-8">
+            <div className="text-center">
+              <p
+                className={`text-xs uppercase tracking-wider mb-1 ${
+                  themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                }`}
+              >
+                Moves
+              </p>
+              <p
+                className={`text-2xl font-bold ${
+                  themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                }`}
+              >
+                {moves}
+              </p>
+            </div>
+            <div className="text-center">
+              <p
+                className={`text-xs uppercase tracking-wider mb-1 ${
+                  themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                }`}
+              >
+                Time
+              </p>
+              <p
+                className={`text-2xl font-bold ${
+                  themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                }`}
+              >
+                {formatTime(seconds)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center">
+          {/* Game Board */}
+          <div
+            data-game-board
+            className={`relative rounded-[24px] shadow-sm mb-6 overflow-hidden ${
+              themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
+            }`}
+            style={{
+              width: puzzleSize + 16,
+              height: puzzleSize + 16,
+            }}
+          >
+            {tiles.map((tile, index) => {
+              if (tile === 0)
+                return (
+                  <div
+                    key={index}
+                    className={`absolute rounded-[8px] ${
+                      themeMode === "dark" ? "bg-white/10" : "bg-white/50"
+                    }`}
+                    style={{
+                      width: tileSize,
+                      height: tileSize,
+                      left: (index % gridSize) * (tileSize + 4) + 4,
+                      top: Math.floor(index / gridSize) * (tileSize + 4) + 4,
+                    }}
+                  />
+                );
+              const pos = getTilePosition(tile);
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleTileClick(index)}
+                  disabled={hasWon}
+                  className="absolute overflow-hidden rounded-[8px] transition-all duration-150 active:scale-95"
                   style={{
-                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                    borderRadius: '3px 3px 0 0',
-                    border: '2px solid #065f46',
-                    borderBottom: 'none',
+                    width: tileSize,
+                    height: tileSize,
+                    left: (index % gridSize) * (tileSize + 4) + 4,
+                    top: Math.floor(index / gridSize) * (tileSize + 4) + 4,
                   }}
-                />
-                {/* Jar lid */}
-                <div 
-                  className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-5 h-2"
-                  style={{
-                    background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
-                    borderRadius: '4px',
-                    border: '1px solid #92400e',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                  }}
-                />
-                {/* Jar shine */}
-                <div 
-                  className="absolute top-1 left-1 w-3 h-3 rounded-full"
-                  style={{
-                    background: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 70%)',
-                  }}
-                />
-                {/* Jar contents (glowing liquid) */}
-                <div 
-                  className="absolute bottom-0 left-0 right-0"
-                  style={{
-                    height: '70%',
-                    background: 'linear-gradient(to top, rgba(74, 222, 128, 0.8) 0%, rgba(52, 211, 153, 0.9) 100%)',
-                    borderRadius: '0 0 6px 6px',
-                    borderTop: '1px solid rgba(255,255,255,0.2)',
-                  }}
-                />
-                {/* Jar glow effect */}
-                <div 
-                  className="absolute -inset-2 rounded-full"
-                  style={{
-                    background: 'radial-gradient(circle, rgba(74, 222, 128, 0.3) 0%, transparent 70%)',
-                    filter: 'blur(4px)',
-                    zIndex: -1,
-                  }}
-                />
-              </div>
-              {/* Jar particle trail */}
-              <div 
-                className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-8 h-2"
+                >
+                  <div
+                    className="absolute inset-0 bg-cover bg-no-repeat"
+                    style={{
+                      backgroundImage: `url(${selectedItem!.imageUrl})`,
+                      backgroundSize: `${puzzleSize - 8}px ${puzzleSize - 8}px`,
+                      backgroundPosition: `${-pos.x * tileSize}px ${
+                        -pos.y * tileSize
+                      }px`,
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Hand Animation */}
+          {handPosition.visible && !hasWon && isPlaying && (
+            <div
+              ref={handRef}
+              className="fixed pointer-events-none z-50 transition-all duration-120 ease-out"
+              style={{
+                left: handPosition.x,
+                top: handPosition.y,
+                transform:
+                  handAnimation === "tapping" ? "scale(0.8)" : "scale(1)",
+                opacity: handPosition.visible ? 1 : 0,
+                width: "48px", // Adjust size as needed
+                height: "48px",
+              }}
+            >
+              <img
+                src="/assets/hand.png"
+                alt="Hand pointer"
+                className="w-full h-full object-contain drop-shadow-lg"
                 style={{
-                  background: 'radial-gradient(ellipse, rgba(74, 222, 128, 0.3) 0%, transparent 70%)',
-                  filter: 'blur(3px)',
+                  transform:
+                    handAnimation === "tapping"
+                      ? "scale(0.85) translateY(5px)"
+                      : "scale(1)",
+                  transition:
+                    handAnimation === "tapping"
+                      ? "transform 80ms ease-out"
+                      : "transform 120ms ease-out",
+                  filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.3))",
                 }}
               />
             </div>
-          ))}
-        </>
-      )}
-
-      {/* DEATH SCREEN - FIXED MOBILE CLICKS */}
-      {gameState === 'dead' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-gradient-to-b from-black/90 via-black/80 to-black/90 backdrop-blur-sm p-4 overflow-y-scroll">
-          {/* Animated particles */}
-          {particles.map(p => (
-            <div
-              key={p.id}
-              className="absolute w-1.5 h-1.5 rounded-full"
-              style={{
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                background: themeStyles.playerColor,
-                opacity: p.life,
-                boxShadow: `0 0 8px ${themeStyles.playerColor}`,
-              }}
-            />
-          ))}
-
-          {/* Death header */}
-          <div className="text-center mb-4">
-            <div className="text-red-500 text-sm uppercase tracking-widest font-bold mb-1">
-              ⚡ GAME OVER ⚡
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2 px-4 max-w-xs">
-              {deathMessage}
-            </h2>
-          </div>
-
-          {/* Score display */}
-          <div className="relative bg-gradient-to-br from-slate-900/50 to-black/50 p-6 rounded-2xl border border-white/10 mb-6">
-            <div className="absolute -inset-1 bg-gradient-to-r from-red-500/20 to-orange-500/20 rounded-2xl blur -z-10" />
-            <div className="text-center">
-              <div className="text-sm text-slate-300 mb-1">Your Score</div>
-              <div className="text-5xl font-black text-white tabular-nums mb-2">
-                {(score * scoreMultiplier).toFixed(1)}s
-              </div>
-              <div className="text-xs text-slate-400">
-                {scoreMultiplier > 1 ? `(${score.toFixed(1)}s × ${scoreMultiplier.toFixed(1)}x)` : 'Base score'}
-              </div>
-            </div>
-          </div>
-
-          {/* Stats summary */}
-          <div className="grid grid-cols-3 gap-3 mb-6 w-full max-w-xs">
-            <div className="bg-white/5 p-3 rounded-xl text-center">
-              <div className="text-lg font-bold text-cyan-300">{coinScore}</div>
-              <div className="text-xs text-slate-400">Coins</div>
-            </div>
-            <div className="bg-white/5 p-3 rounded-xl text-center">
-              <div className="text-lg font-bold text-emerald-300">{streak}</div>
-              <div className="text-xs text-slate-400">Day Streak</div>
-            </div>
-            <div className="bg-white/5 p-3 rounded-xl text-center">
-              <div className="text-lg font-bold text-amber-300">{highScore.toFixed(1)}s</div>
-              <div className="text-xs text-slate-400">Best</div>
-            </div>
-          </div>
-
-          {/* Record badge */}
-          {isNewRecord && (
-            <div className="mb-4 px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-black font-bold rounded-full text-sm animate-pulse">
-              🏆 NEW PERSONAL RECORD! 🏆
-            </div>
           )}
 
-          {/* Action buttons - FIXED FOR MOBILE */}
-          <div className="flex flex-col gap-3 w-full max-w-xs p-4">
+          {/* Goal Image Preview */}
+          <div
+            className={`flex items-center gap-4 mb-6 rounded-[20px] p-4 w-full max-w-xs ${
+              themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
+            }`}
+          >
+            <div className="text-center">
+              <p
+                className={`text-xs uppercase tracking-wider mb-2 ${
+                  themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                }`}
+              >
+                Goal
+              </p>
+              <img
+                src={selectedItem!.imageUrl}
+                alt="Goal"
+                className="w-16 h-16 rounded-[12px] object-cover"
+              />
+            </div>
+            <div className="text-left">
+              <p
+                className={`font-semibold ${
+                  themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                }`}
+              >
+                {selectedItem!.name}
+              </p>
+              <p
+                className={`text-sm ${
+                  themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                }`}
+              >
+                {selectedItem!.symbol}
+              </p>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex gap-3 w-full max-w-xs">
+            <button
+              onClick={() => startGame()}
+              className={`flex-1 py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
+                themeMode === "dark"
+                  ? "bg-gray-800 border-gray-700 text-white"
+                  : "bg-gray-400/50 border-[#EAEAEA] text-[#0A0A0A]"
+              }`}
+            >
+              🔄 Shuffle
+            </button>
             <button
               onClick={resetGame}
-              className="relative px-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-black font-bold rounded-xl text-lg shadow-2xl hover:scale-105 transition-transform active:scale-95"
+              className={`flex-1 py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
+                themeMode === "dark"
+                  ? "bg-gray-800 border-gray-700 text-white"
+                  : "bg-gray-400/50 border-[#EAEAEA] text-[#0A0A0A]"
+              }`}
             >
-              🔄 PLAY AGAIN
-            </button>
-            
-            <button
-              onClick={shareScore}
-              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg hover:scale-105 transition-transform active:scale-95"
-            >
-              🐦 SHARE ON X
-            </button>
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowChallenges(true);
-                setGameState('start');
-              }}
-              className="px-6 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/15 transition-colors active:bg-white/20"
-            >
-              🏆 VIEW CHALLENGES
+              Change Image
             </button>
           </div>
+        </div>
 
-          {/* Progress towards next achievement */}
-          {todayChallenge && (
-            <div className="mt-6 w-full max-w-xs bg-white/5 p-3 rounded-xl">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-emerald-300">Daily Progress</span>
-                <span className="text-xs text-slate-300">{todayChallenge.progress}/{todayChallenge.target}</span>
+        {/* Win Modal */}
+        {hasWon && selectedItem && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-5">
+            {showConfetti && <Confetti />}
+            <div
+              className={`w-full max-w-sm rounded-[28px] overflow-hidden shadow-xl ${
+                themeMode === "dark" ? "bg-gray-900" : "bg-white"
+              }`}
+            >
+              {/* Card Preview */}
+              <div className="p-6 pb-4">
+                <h3
+                  className={`text-2xl font-bold tracking-tight leading-none mb-6 ${
+                    themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                  }`}
+                >
+                  PUZZLE COMPLETED
+                </h3>
+
+                {/* Framed Image */}
+                <div
+                  className={`border p-4 rounded-[20px] mb-4 ${
+                    themeMode === "dark"
+                      ? "border-gray-700"
+                      : "border-[#EAEAEA]"
+                  }`}
+                >
+                  <p
+                    className={`text-center font-medium tracking-wide text-sm mb-3 uppercase ${
+                      themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                    }`}
+                  >
+                    {selectedItem.name}
+                  </p>
+                  <img
+                    src={selectedItem.imageUrl}
+                    alt={selectedItem.name}
+                    className="w-full aspect-square object-cover rounded-[12px]"
+                  />
+                  <p
+                    className={`text-sm italic mt-3 text-center ${
+                      themeMode === "dark" ? "text-gray-400" : "text-[#666666]"
+                    }`}
+                  >
+                    Foto Game
+                  </p>
+                </div>
               </div>
-              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-2 bg-gradient-to-r from-emerald-400 to-cyan-400"
-                  style={{ width: `${Math.min(100, (todayChallenge.progress / todayChallenge.target) * 100)}%` }}
-                />
+
+              {/* Stats */}
+              <div
+                className={`border-t ${
+                  themeMode === "dark" ? "border-gray-800" : "border-[#EAEAEA]"
+                }`}
+              >
+                <div
+                  className={`grid grid-cols-2 ${
+                    themeMode === "dark"
+                      ? "divide-gray-800"
+                      : "divide-[#EAEAEA]"
+                  } divide-x`}
+                >
+                  <div className="p-3 text-center">
+                    <p
+                      className={`text-sm font-medium tracking-wider mb-2 ${
+                        themeMode === "dark"
+                          ? "text-gray-400"
+                          : "text-[#666666]"
+                      }`}
+                    >
+                      MOVES
+                    </p>
+                    <p
+                      className={`text-3xl font-bold ${
+                        themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                      }`}
+                    >
+                      {moves}
+                    </p>
+                  </div>
+                  <div className="p-3 text-center">
+                    <p
+                      className={`text-sm font-medium tracking-wider mb-2 ${
+                        themeMode === "dark"
+                          ? "text-gray-400"
+                          : "text-[#666666]"
+                      }`}
+                    >
+                      TIME
+                    </p>
+                    <p
+                      className={`text-3xl font-bold ${
+                        themeMode === "dark" ? "text-white" : "text-[#0A0A0A]"
+                      }`}
+                    >
+                      {formatTime(seconds)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={downloadVictoryCard}
+                    disabled={isDownloading}
+                    className={`py-3 text-white font-medium rounded-[12px] hover:opacity-90 transition-all text-sm disabled:opacity-50 ${
+                      themeMode === "dark" ? "bg-blue-600" : "bg-[#0A0A0A]"
+                    }`}
+                  >
+                    {isDownloading ? "Saving..." : "⬇️ Save Card"}
+                  </button>
+                  <button
+                    onClick={shareOnX}
+                    className={`py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
+                      themeMode === "dark"
+                        ? "bg-gray-800 border-gray-700 text-white"
+                        : "bg-white border-[#EAEAEA] text-[#0A0A0A]"
+                    }`}
+                  >
+                    Share on X
+                  </button>
+                </div>
+                <button
+                  onClick={resetGame}
+                  className="w-full py-4 bg-[#007AFF] text-white font-medium rounded-[14px] hover:bg-[#0056CC] transition-all"
+                >
+                  🎮 PLAY AGAIN
+                </button>
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Confetti: FC = () => {
+  const [pieces] = useState(() => Array.from({ length: 50 }));
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
+      {pieces.map((_, i) => {
+        const left = Math.random() * 100;
+        const delay = Math.random() * 0.6;
+        const bg = ["#007AFF", "#34C759", "#FF9500", "#FF3B30", "#AF52DE"][
+          i % 5
+        ];
+        const style: React.CSSProperties = {
+          left: `${left}%`,
+          animationDelay: `${delay}s`,
+          background: bg,
+          width: `${Math.random() * 10 + 8}px`,
+          height: `${Math.random() * 10 + 12}px`,
+          borderRadius: Math.random() > 0.5 ? "2px" : "50%",
+          position: "absolute",
+          top: "-20px",
+          animation: "confetti-fall 3s ease-out forwards",
+        };
+        return <div key={i} style={style} />;
+      })}
+      <style>{`
+        @keyframes confetti-fall {
+          to {
+            transform: translateY(120vh) rotate(720deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   );
 };
