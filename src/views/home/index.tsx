@@ -64,6 +64,13 @@ interface GameSandboxProps {
   theme?: "light" | "dark";
 }
 
+interface MoveRecord {
+  tileId: number;
+  fromIndex: number;
+  toIndex: number;
+  timestamp: number;
+}
+
 const PUZZLE_IMAGES: PuzzleItem[] = [
   { id: 1, imageUrl: "/assets/jup.jpg", name: "Jupiter", symbol: "JUP" },
   { id: 2, imageUrl: "/assets/sol.jpg", name: "Solana", symbol: "SOL" },
@@ -182,11 +189,22 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
     "idle" | "moving" | "tapping"
   >("idle");
   const [themeMode, setThemeMode] = useState<"light" | "dark">(theme);
+  
+  // Watch Mode State
+  const [isWatchMode, setIsWatchMode] = useState(false);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [moveRecords, setMoveRecords] = useState<MoveRecord[]>([]);
+  const [currentReplayIndex, setCurrentReplayIndex] = useState(0);
+  const [initialTilesState, setInitialTilesState] = useState<number[]>([]);
+  const [showWatchButton, setShowWatchButton] = useState(false);
+  const [replayLoopCount, setReplayLoopCount] = useState(0);
+  
   const handRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const moveSoundRef = useRef<OscillatorNode | null>(null);
   const snapSoundRef = useRef<OscillatorNode | null>(null);
   const winSoundRef = useRef<OscillatorNode | null>(null);
+  const replayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setThemeMode(theme);
@@ -245,6 +263,16 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
   useEffect(() => {
     localStorage.setItem(SOUND_ENABLED_KEY, soundEnabled.toString());
   }, [soundEnabled]);
+
+  // Cleanup replay on unmount
+  useEffect(() => {
+    return () => {
+      if (replayTimeoutRef.current) {
+        clearTimeout(replayTimeoutRef.current);
+        replayTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const initAudio = useCallback(() => {
     if (!audioContextRef.current && soundEnabled) {
@@ -375,8 +403,6 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
       const row = Math.floor(tileIndex / gridSize);
       const col = tileIndex % gridSize;
 
-      // Adjust these offsets to position the hand properly over tiles
-      // -20 and -40 centers the hand over the tile (assuming hand.png is ~48x48)
       const x = boardRect.left + col * (tileSize + 4) + tileSize / 2 - 24;
       const y = boardRect.top + row * (tileSize + 4) + tileSize / 2 - 24;
 
@@ -394,6 +420,36 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
       }, 120);
     },
     [isPlaying, hasWon, gridSize, tileSize]
+  );
+
+  const animateHandForReplay = useCallback(
+    (tileIndex: number) => {
+      if (!handRef.current || !isWatchMode) return;
+
+      const board = document.querySelector("[data-game-board]");
+      if (!board) return;
+
+      const boardRect = board.getBoundingClientRect();
+      const row = Math.floor(tileIndex / gridSize);
+      const col = tileIndex % gridSize;
+
+      const x = boardRect.left + col * (tileSize + 4) + tileSize / 2 - 24;
+      const y = boardRect.top + row * (tileSize + 4) + tileSize / 2 - 24;
+
+      setHandPosition({ x, y, visible: true });
+      setHandAnimation("moving");
+
+      setTimeout(() => {
+        setHandAnimation("tapping");
+        setTimeout(() => {
+          setHandAnimation("idle");
+          setTimeout(() => {
+            setHandPosition((prev) => ({ ...prev, visible: false }));
+          }, 200);
+        }, 80);
+      }, 120);
+    },
+    [gridSize, tileSize, isWatchMode]
   );
 
   const fetchPixabayImages = async (query: string = "cars") => {
@@ -533,6 +589,10 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
         [arr[i], arr[j]] = [arr[j], arr[i]];
       }
     } while (!isSolvable(arr, newSize) || isSolved(arr));
+    
+    // Clear move records and store initial state
+    setMoveRecords([]);
+    setInitialTilesState([...arr]);
     setTiles(arr);
     setMoves(0);
     setSeconds(0);
@@ -540,6 +600,15 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
     setHasWon(false);
     setShowImagePicker(false);
     setShowDailyComplete(false);
+    setIsWatchMode(false);
+    setShowWatchButton(false);
+    setReplayLoopCount(0);
+    setCurrentReplayIndex(0);
+
+    if (replayTimeoutRef.current) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
 
     if (isDaily) {
       setSelectedMain(selectedItem);
@@ -563,6 +632,15 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
     localStorage.setItem(DAILY_STATS_KEY, JSON.stringify(newStats));
     setShowDailyComplete(true);
   };
+
+  const recordMove = useCallback((tileId: number, fromIndex: number, toIndex: number) => {
+    setMoveRecords(prev => [...prev, {
+      tileId,
+      fromIndex,
+      toIndex,
+      timestamp: Date.now()
+    }]);
+  }, []);
 
   const selectPixabayImage = (image: PuzzleItem) => {
     setSelectedPixabayImage(image);
@@ -662,6 +740,7 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
 
     playWinSound();
     setShowConfetti(true);
+    setShowWatchButton(true);
 
     if (
       dailyPuzzle &&
@@ -676,6 +755,8 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
   }, [hasWon, dailyPuzzle, activeTab, gridSize, playWinSound]);
 
   const handleTileClick = (index: number) => {
+    if (isWatchMode || isReplaying) return;
+    
     let selectedItem: PuzzleItem | null;
 
     switch (activeTab) {
@@ -708,10 +789,15 @@ const GameSandbox: FC<GameSandboxProps> = ({ theme = "dark" }) => {
     if (!isAdjacent) return;
 
     const newTiles = [...tiles];
+    const tileId = newTiles[index];
     [newTiles[index], newTiles[emptyIndex]] = [
       newTiles[emptyIndex],
       newTiles[index],
     ];
+    
+    // Record the move
+    recordMove(tileId, index, emptyIndex);
+    
     setTiles(newTiles);
     setMoves((m) => m + 1);
 
@@ -976,7 +1062,126 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
     setIsPlaying(false);
     setMoves(0);
     setSeconds(0);
+    setIsWatchMode(false);
+    setShowWatchButton(false);
+    setMoveRecords([]);
+    setCurrentReplayIndex(0);
+    setReplayLoopCount(0);
+    
+    if (replayTimeoutRef.current) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
   };
+
+  const startWatchMode = useCallback(() => {
+    if (moveRecords.length === 0 || !hasWon || isWatchMode) return;
+    
+    setIsWatchMode(true);
+    setIsReplaying(true);
+    setCurrentReplayIndex(0);
+    setReplayLoopCount(0);
+    
+    // Reset to initial state (shuffled state)
+    setTiles([...initialTilesState]);
+    
+    // Start replay after a short delay
+    setTimeout(() => {
+      performReplay();
+    }, 300);
+  }, [moveRecords, hasWon, isWatchMode, initialTilesState]);
+
+  const performReplay = useCallback(() => {
+    if (moveRecords.length === 0) return;
+    
+    let currentIndex = 0;
+    const totalMoves = moveRecords.length;
+    
+    const playNextMove = () => {
+      if (currentIndex >= totalMoves) {
+        // Replay completed
+        setIsReplaying(false);
+        setCurrentReplayIndex(totalMoves);
+        
+        // Increment loop count
+        setReplayLoopCount(prev => prev + 1);
+        
+        // If this was the first loop (0 -> 1), do one more loop
+        if (replayLoopCount === 0) {
+          // Wait 400ms then loop once more
+          replayTimeoutRef.current = setTimeout(() => {
+            // Reset for second loop
+            currentIndex = 0;
+            setTiles([...initialTilesState]);
+            setCurrentReplayIndex(0);
+            setIsReplaying(true);
+            
+            const loopReplay = () => {
+              if (currentIndex >= totalMoves) {
+                setIsReplaying(false);
+                setCurrentReplayIndex(totalMoves);
+                return;
+              }
+              
+              const move = moveRecords[currentIndex];
+              
+              // Animate hand for this move
+              animateHandForReplay(move.fromIndex);
+              
+              setTiles(prev => {
+                const newTiles = [...prev];
+                [newTiles[move.fromIndex], newTiles[move.toIndex]] = 
+                  [newTiles[move.toIndex], newTiles[move.fromIndex]];
+                return newTiles;
+              });
+              
+              setCurrentReplayIndex(currentIndex + 1);
+              currentIndex++;
+              
+              replayTimeoutRef.current = setTimeout(loopReplay, 160);
+            };
+            
+            loopReplay();
+          }, 400);
+        }
+        return;
+      }
+      
+      const move = moveRecords[currentIndex];
+      
+      // Animate hand for this move
+      animateHandForReplay(move.fromIndex);
+      
+      setTiles(prev => {
+        const newTiles = [...prev];
+        [newTiles[move.fromIndex], newTiles[move.toIndex]] = 
+          [newTiles[move.toIndex], newTiles[move.fromIndex]];
+        return newTiles;
+      });
+      
+      setCurrentReplayIndex(currentIndex + 1);
+      currentIndex++;
+      
+      replayTimeoutRef.current = setTimeout(playNextMove, 160);
+    };
+    
+    playNextMove();
+  }, [moveRecords, initialTilesState, replayLoopCount, animateHandForReplay]);
+
+  const exitWatchMode = useCallback(() => {
+    if (replayTimeoutRef.current) {
+      clearTimeout(replayTimeoutRef.current);
+      replayTimeoutRef.current = null;
+    }
+    
+    setIsWatchMode(false);
+    setIsReplaying(false);
+    setCurrentReplayIndex(0);
+    setReplayLoopCount(0);
+    // Restore the solved state
+    const solvedState = Array.from({ length: gridSize * gridSize }, (_, i) => i);
+    setTiles([...solvedState]);
+  }, [gridSize]);
 
   const today = new Date().toDateString();
   const dailyCompleted = dailyStats[today]?.completed || false;
@@ -1066,6 +1271,14 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
           .hand-tap {
             animation: hand-press 200ms ease-out;
           }
+          
+          @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+          }
+          .animate-pulse-subtle {
+            animation: pulse-subtle 1.5s ease-in-out infinite;
+          }
          `}
         </style>
         <div
@@ -1126,7 +1339,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                         : "bg-orange-100 text-orange-600"
                     }`}
                   >
-                    🔥 TODAY&apos;S PUZZLE
+                    🔥 TODAY'S PUZZLE
                   </span>
                 </div>
 
@@ -1357,7 +1570,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
             {activeTab === "create" && (
               <div className="mb-8">
                 <div
-                  className={`rounded-[24px] p-2 ${
+                  className={`rounded-[24px] p-4 ${
                     themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
                   }`}
                 >
@@ -1390,7 +1603,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                     />
                     <button
                       onClick={() => fetchPixabayImages(pixabaySearchQuery)}
-                      className="px-3 bg-[#007AFF] text-white font-medium rounded-r-[12px] text-sm hover:bg-[#0056CC]"
+                      className="px-2 bg-[#007AFF] text-white font-medium rounded-r-[12px] text-sm hover:bg-[#0056CC]"
                     >
                       Search
                     </button>
@@ -1741,32 +1954,79 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
     <div
       className={`h-full w-full overflow-auto ${
         themeMode === "dark" ? "bg-gray-900" : "bg-white"
-      }`}
+      } relative`}
     >
-      {/* Sound Toggle */}
-      <button
-        onClick={() => setSoundEnabled(!soundEnabled)}
-        className={`absolute top-4 right-4 z-10 p-2 rounded-full ${
-          themeMode === "dark"
-            ? "bg-gray-800 hover:bg-gray-700"
-            : "bg-gray-100 hover:bg-gray-200"
-        } transition-all`}
-        aria-label={soundEnabled ? "Mute sounds" : "Enable sounds"}
-      >
-        {soundEnabled ? "🔊" : "🔇"}
-      </button>
+      {/* Watch Mode Overlay */}
+      {isWatchMode && (
+        <div className="absolute inset-0 z-40 bg-black/20 backdrop-blur-[1px]">
+          {/* Watch Mode Header */}
+          <div className="absolute top-4 left-0 right-0 flex items-center justify-between px-5 z-50">
+            <div className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-sm">
+              <span className="text-white text-xs font-medium">Replay</span>
+            </div>
+            <button
+              onClick={exitWatchMode}
+              className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-sm text-white text-xs font-medium hover:bg-black/70 transition-colors"
+            >
+              Exit
+            </button>
+          </div>
+          
+          {/* Progress Indicator */}
+          {moveRecords.length > 0 && (
+            <div className="absolute bottom-20 left-0 right-0 flex justify-center space-x-1.5">
+              {Array.from({ length: moveRecords.length }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
+                    idx < currentReplayIndex
+                      ? "bg-blue-400"
+                      : "bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+          
+          {/* Solved Text (appears after replay) */}
+          {!isReplaying && currentReplayIndex >= moveRecords.length && moveRecords.length > 0 && (
+            <div className="absolute bottom-28 left-0 right-0 flex justify-center animate-fade-in">
+              <div className="px-4 py-2 rounded-full bg-black/50 backdrop-blur-sm">
+                <span className="text-white text-sm font-medium">
+                  Solved in {moves} moves
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sound Toggle - Fixed positioning to not overlap Back button */}
+      {!isWatchMode && (
+        <button
+          onClick={() => setSoundEnabled(!soundEnabled)}
+          className={`absolute top-16 right-4 z-10 p-2 rounded-full ${
+            themeMode === "dark"
+              ? "bg-gray-800 hover:bg-gray-700"
+              : "bg-gray-100 hover:bg-gray-200"
+          } transition-all z-30`}
+          aria-label={soundEnabled ? "Mute sounds" : "Enable sounds"}
+        >
+          {soundEnabled ? "🔊" : "🔇"}
+        </button>
+      )}
 
       <div className="px-5 pt-5">
-        {/* Game Header */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Game Header - Fixed layout to prevent overlap */}
+        <div className="flex items-center justify-between mb-6 relative">
           <button
             onClick={resetGame}
-            className="text-[#007AFF] text-sm font-medium"
+            className="text-[#007AFF] text-sm font-medium z-20 relative"
           >
             ← Back
           </button>
 
-          <div className="flex gap-8">
+          <div className="flex gap-8 relative z-10">
             <div className="text-center">
               <p
                 className={`text-xs uppercase tracking-wider mb-1 ${
@@ -1800,15 +2060,18 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
               </p>
             </div>
           </div>
+          
+          {/* Empty div to balance layout */}
+          <div className="w-10"></div>
         </div>
 
         <div className="flex flex-col items-center">
           {/* Game Board */}
           <div
             data-game-board
-            className={`relative rounded-[24px] shadow-sm mb-6 overflow-hidden ${
+            className={`relative rounded-[24px] shadow-sm mb-6 overflow-hidden transition-all duration-300 ${
               themeMode === "dark" ? "bg-gray-800" : "bg-[#F5F5F7]"
-            }`}
+            } ${isWatchMode ? 'scale-[0.96] border-2 border-blue-400/30 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : ''}`}
             style={{
               width: puzzleSize + 16,
               height: puzzleSize + 16,
@@ -1835,7 +2098,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                 <button
                   key={index}
                   onClick={() => handleTileClick(index)}
-                  disabled={hasWon}
+                  disabled={hasWon || isWatchMode || isReplaying}
                   className="absolute overflow-hidden rounded-[8px] transition-all duration-150 active:scale-95"
                   style={{
                     width: tileSize,
@@ -1859,8 +2122,8 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
             })}
           </div>
 
-          {/* Hand Animation */}
-          {handPosition.visible && !hasWon && isPlaying && (
+          {/* Hand Animation for gameplay */}
+          {handPosition.visible && !hasWon && isPlaying && !isWatchMode && (
             <div
               ref={handRef}
               className="fixed pointer-events-none z-50 transition-all duration-120 ease-out"
@@ -1870,7 +2133,41 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                 transform:
                   handAnimation === "tapping" ? "scale(0.8)" : "scale(1)",
                 opacity: handPosition.visible ? 1 : 0,
-                width: "48px", // Adjust size as needed
+                width: "48px",
+                height: "48px",
+              }}
+            >
+              <img
+                src="/assets/hand.png"
+                alt="Hand pointer"
+                className="w-full h-full object-contain drop-shadow-lg"
+                style={{
+                  transform:
+                    handAnimation === "tapping"
+                      ? "scale(0.85) translateY(5px)"
+                      : "scale(1)",
+                  transition:
+                    handAnimation === "tapping"
+                      ? "transform 80ms ease-out"
+                      : "transform 120ms ease-out",
+                  filter: "drop-shadow(2px 2px 4px rgba(0,0,0,0.3))",
+                }}
+              />
+            </div>
+          )}
+
+          {/* Hand Animation for replay */}
+          {handPosition.visible && isWatchMode && isReplaying && (
+            <div
+              ref={handRef}
+              className="fixed pointer-events-none z-50 transition-all duration-120 ease-out"
+              style={{
+                left: handPosition.x,
+                top: handPosition.y,
+                transform:
+                  handAnimation === "tapping" ? "scale(0.8)" : "scale(1)",
+                opacity: handPosition.visible ? 1 : 0,
+                width: "48px",
                 height: "48px",
               }}
             >
@@ -1931,39 +2228,41 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex gap-3 w-full max-w-xs">
-            <button
-              onClick={() => startGame()}
-              className={`flex-1 py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
-                themeMode === "dark"
-                  ? "bg-gray-800 border-gray-700 text-white"
-                  : "bg-gray-400/50 border-[#EAEAEA] text-[#0A0A0A]"
+          {/* Controls - Hidden during watch mode */}
+          {!isWatchMode && (
+            <div className="flex gap-3 w-full max-w-xs">
+              <button
+                onClick={() => startGame()}
+                className={`flex-1 py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
+                  themeMode === "dark"
+                    ? "bg-gray-800 border-gray-700 text-white"
+                    : "bg-gray-400/50 border-[#EAEAEA] text-[#0A0A0A]"
+                }`}
+              >
+                🔄 Shuffle
+              </button>
+              <button
+                onClick={resetGame}
+                className={`flex-1 py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
+                  themeMode === "dark"
+                    ? "bg-gray-800 border-gray-700 text-white"
+                    : "bg-gray-400/50 border-[#EAEAEA] text-[#0A0A0A]"
               }`}
-            >
-              🔄 Shuffle
-            </button>
-            <button
-              onClick={resetGame}
-              className={`flex-1 py-3 border font-medium rounded-[12px] hover:opacity-90 transition-all text-sm ${
-                themeMode === "dark"
-                  ? "bg-gray-800 border-gray-700 text-white"
-                  : "bg-gray-400/50 border-[#EAEAEA] text-[#0A0A0A]"
-              }`}
-            >
-              Change Image
-            </button>
-          </div>
+              >
+                Change Image
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Win Modal */}
-        {hasWon && selectedItem && (
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-5">
+        {/* Win Modal with Watch Mode Button */}
+        {hasWon && selectedItem && !isWatchMode && (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-5 z-40">
             {showConfetti && <Confetti />}
             <div
               className={`w-full max-w-sm rounded-[28px] overflow-hidden shadow-xl ${
                 themeMode === "dark" ? "bg-gray-900" : "bg-white"
-              }`}
+              } z-50`}
             >
               {/* Card Preview */}
               <div className="p-6 pb-4">
@@ -2059,6 +2358,17 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
 
               {/* Actions */}
               <div className="p-3 space-y-3">
+                {/* Watch Mode Button - only show if we have moves recorded */}
+                {showWatchButton && moveRecords.length > 0 && (
+                  <button
+                    onClick={startWatchMode}
+                    className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-[14px] hover:opacity-90 transition-all animate-pulse-subtle flex items-center justify-center gap-2"
+                  >
+                    <span className="text-lg">👀</span>
+                    <span>Watch How You Solved It</span>
+                  </button>
+                )}
+                
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={downloadVictoryCard}
@@ -2124,6 +2434,13 @@ const Confetti: FC = () => {
             transform: translateY(120vh) rotate(720deg);
             opacity: 0;
           }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
         }
       `}</style>
     </div>
