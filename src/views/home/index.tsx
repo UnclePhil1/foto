@@ -1,4 +1,5 @@
-// Next, React
+'use client';
+
 import { FC, useEffect, useState, useCallback, useRef } from "react";
 import pkg from "../../../package.json";
 import React from "react";
@@ -1339,7 +1340,7 @@ Play the puzzle game at FOTO! #FOTOGame #scrollygame`;
                         : "bg-orange-100 text-orange-600"
                     }`}
                   >
-                    🔥 TODAY'S PUZZLE
+                    🔥 TODAY&apos;S PUZZLE
                   </span>
                 </div>
 
